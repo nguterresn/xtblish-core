@@ -1,0 +1,86 @@
+# https://clang-format-configurator.site/
+Language: Cpp
+IndentWidth: 4
+TabWidth: 4
+UseTab: ForIndentation
+AllowShortIfStatementsOnASingleLine: Never
+ColumnLimit: 100
+MaxEmptyLinesToKeep: 1
+KeepEmptyLinesAtTheStartOfBlocks: false
+KeepEmptyLinesAtEOF: true
+InsertNewlineAtEOF: true
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterFunction: true
+  AfterEnum: false
+  AfterStruct: false
+  SplitEmptyFunction: true
+  BeforeElse: true
+  BeforeCatch: false
+  AfterCaseLabel: false
+  AfterClass: false
+  AfterControlStatement: Never
+  AfterNamespace: false
+  AfterUnion: false
+  BeforeWhile: false
+  IndentBraces: false
+SpaceBeforeParens: ControlStatements
+PointerAlignment: Left
+SpaceAroundPointerQualifiers: Before
+QualifierAlignment: Custom
+QualifierOrder:
+  - inline
+  - static
+  - volatile
+  - const
+  - type
+SeparateDefinitionBlocks: Always
+IndentCaseLabels: false
+IndentCaseBlocks: true
+IndentGotoLabels: false
+IndentPPDirectives: None
+BreakBeforeBinaryOperators: None
+Cpp11BracedListStyle: false
+AlignConsecutiveAssignments:
+  Enabled: true
+  AcrossEmptyLines: false
+  AcrossComments: false
+AlignConsecutiveBitFields:
+  Enabled: true
+  AcrossEmptyLines: true
+  AcrossComments: true
+AlignConsecutiveDeclarations:
+  Enabled: true
+  AcrossEmptyLines: false
+  AcrossComments: false
+AlignConsecutiveMacros:
+  Enabled: true
+  AcrossEmptyLines: false
+  AcrossComments: false
+AlignAfterOpenBracket: Align
+AllowAllArgumentsOnNextLine: false
+AllowAllParametersOfDeclarationOnNextLine: false
+AllowShortBlocksOnASingleLine: Empty
+AllowShortFunctionsOnASingleLine: None
+IndentAccessModifiers: false
+InsertBraces: true
+AlignEscapedNewlines: Left
+AlignOperands: Align
+AlignTrailingComments:
+  Kind: Always
+  OverEmptyLines: 0
+BreakStringLiterals: true
+AlignConsecutiveShortCaseStatements:
+  Enabled: true
+AllowShortEnumsOnASingleLine: false
+AllowShortCaseLabelsOnASingleLine: false
+BinPackArguments: false
+BinPackParameters: true
+AlwaysBreakBeforeMultilineStrings: false
+SortIncludes: Never
+ReflowComments: false
+PenaltyBreakComment: 0
+PenaltyBreakOpenParenthesis: 1000000
+PenaltyBreakAssignment: 1000000
+PenaltyBreakBeforeFirstCallParameter: 1000000
+PenaltyReturnTypeOnItsOwnLine: 1000000

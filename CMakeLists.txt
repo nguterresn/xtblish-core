@@ -3,6 +3,8 @@ cmake_minimum_required (VERSION 3.20)
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 
 project (wasm-zephyr-ota)
+enable_language(ASM)
+
 set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
 
 # Reset default linker flags
@@ -23,10 +25,9 @@ include(wasm.cmake) # Include WASM related CMake variables.
 set(WAMR_ROOT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/libs/wasm-micro-runtime)
 include (${WAMR_ROOT_DIR}/build-scripts/runtime_lib.cmake)
 
-set(WASM_OUTPUT ${CMAKE_SOURCE_DIR}/application/build/release.wasm)
-
 # The target 'generate_wasm' requires WASM_OUTPUT, so if it doesn't exist,
 # the next command will generate it.
+set(WASM_OUTPUT ${CMAKE_SOURCE_DIR}/application/build/release.wasm)
 add_custom_target(generate_wasm ALL DEPENDS ${WASM_OUTPUT})
 add_custom_command(
   OUTPUT ${WASM_OUTPUT}
@@ -35,7 +36,11 @@ add_custom_command(
   COMMAND npx asc assembly/index.ts --initialMemory 1 --maximumMemory 1 --lowMemoryLimit
 )
 
-add_executable(app ${WAMR_RUNTIME_LIB_SOURCE} application/main.c)
+target_sources(app PUBLIC ${WAMR_RUNTIME_LIB_SOURCE} application/main.c)
+# target_include_directories(app PUBLIC
+#   ${CMAKE_SOURCE_DIR}/libs/wasm-micro-runtime/core/iwasm/include
+#   ${CMAKE_SOURCE_DIR}/libs/wasm-micro-runtime/core/shared/platform/include
+# )
 
 # Print app and wasm binary size
 add_custom_command(

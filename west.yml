@@ -2,7 +2,7 @@ manifest:
 
   projects:
     - name: zephyr
-      revision: main
+      revision: v3.7.1
       path: zephyr
       url: https://github.com/zephyrproject-rtos/zephyr.git
       import: true
