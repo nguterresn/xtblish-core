@@ -1,5 +1,0 @@
-[manifest]
-path = .
-
-[zephyr]
-base = /Users/nunonogueira/zephyrproject/zephyr

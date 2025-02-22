@@ -1,8 +1,16 @@
 manifest:
 
   projects:
+    - name: zephyr
+      revision: main
+      path: zephyr
+      url: https://github.com/zephyrproject-rtos/zephyr.git
+      import: true
+
     - name: wasm-micro-runtime
       revision: main
-      path: libs/wasm-micro-runtime
+      path: wasm-zephyr-ota/libs/wasm-micro-runtime
       url: https://github.com/bytecodealliance/wasm-micro-runtime.git
 
+  self:
+    path: wasm-zephyr-ota
