@@ -1,0 +1,8 @@
+manifest:
+
+  projects:
+    - name: wasm-micro-runtime
+      revision: main
+      path: libs/wasm-micro-runtime
+      url: https://github.com/bytecodealliance/wasm-micro-runtime.git
+
