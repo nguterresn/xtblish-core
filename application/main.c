@@ -1,10 +1,11 @@
 #include "wasm_export.h"
+#include "zephyr/kernel.h"
 // #include "wasm_runtime.h"
 // #include "wasm_runtime_common.h"
 #include <stdint.h>
 #include <stdio.h>
 
-static unsigned char* read_wasm_file(const char* filename, size_t* size);
+// static unsigned char* read_wasm_file(const char* filename, size_t* size);
 
 /**
  * @brief Port console.log to the native side. Provide a way to log from WASM
@@ -19,16 +20,29 @@ static void console_log(wasm_exec_env_t exec_env, const uint16_t* str);
 static void _abort(wasm_exec_env_t exec_env, const uint16_t* msg, const uint16_t* filename,
                    uint32_t file_line, uint32_t col_line);
 
-static NativeSymbol native_symbols[] = { {
-	                                         "console.log", // the name of WASM function name
-	                                         console_log,   // the native function pointer
-	                                         "($)"          // the function prototype signature
-	                                     },
-	                                     {
-	                                         "abort", // the name of WASM function name
-	                                         _abort,  // the native function pointer
-	                                         "($$ii)" // the function prototype signature
-	                                     } };
+static const NativeSymbol native_symbols[] = { {
+	                                               "console.log", // the name of WASM function name
+	                                               console_log,   // the native function pointer
+	                                               "($)" // the function prototype signature
+	                                           },
+	                                           {
+	                                               "abort", // the name of WASM function name
+	                                               _abort,  // the native function pointer
+	                                               "($$ii)" // the function prototype signature
+	                                           } };
+
+static RuntimeInitArgs runtime_args = {
+	.mem_alloc_type = Alloc_With_Allocator,
+	.mem_alloc_option = {
+		.allocator = {
+			.malloc_func = k_malloc,
+			.realloc_func= k_realloc,
+			.free_func = k_free,
+		}
+	},
+	.n_native_symbols = 0,
+	.gc_heap_size = 0
+};
 
 int main(void)
 {
@@ -36,7 +50,7 @@ int main(void)
 	// uint32 stack_size = 4096, heap_size = 0;
 	// size_t wasm_file_size = 0;
 
-	bool result = wasm_runtime_init();
+	bool result = wasm_runtime_full_init(&runtime_args);
 	if (!result) {
 		printf("Failed to initialize the runtime.\n");
 	}
@@ -111,36 +125,36 @@ void _abort(wasm_exec_env_t exec_env, const uint16_t* msg, const uint16_t* filen
 	printf("[Native]: WASM module abort line %d col %d", file_line, col_line);
 }
 
-unsigned char* read_wasm_file(const char* filename, size_t* size)
-{
-	FILE* file = fopen(filename, "rb");
-	if (!file) {
-		fprintf(stderr, "Failed to open file '%s': %s\n", filename, strerror(errno));
-		return NULL;
-	}
+// unsigned char* read_wasm_file(const char* filename, size_t* size)
+// {
+// 	FILE* file = fopen(filename, "rb");
+// 	if (!file) {
+// 		fprintf(stderr, "Failed to open file '%s': %s\n", filename, strerror(errno));
+// 		return NULL;
+// 	}
 
-	// Get file size
-	fseek(file, 0, SEEK_END);
-	*size = ftell(file);
-	fseek(file, 0, SEEK_SET);
+// 	// Get file size
+// 	fseek(file, 0, SEEK_END);
+// 	*size = ftell(file);
+// 	fseek(file, 0, SEEK_SET);
 
-	// Allocate memory for the entire file
-	unsigned char* buffer = (unsigned char*)malloc(*size);
-	if (!buffer) {
-		fprintf(stderr, "Failed to allocate memory for file content\n");
-		fclose(file);
-		return NULL;
-	}
+// 	// Allocate memory for the entire file
+// 	unsigned char* buffer = (unsigned char*)malloc(*size);
+// 	if (!buffer) {
+// 		fprintf(stderr, "Failed to allocate memory for file content\n");
+// 		fclose(file);
+// 		return NULL;
+// 	}
 
-	// Read the file into the buffer
-	size_t read_size = fread(buffer, 1, *size, file);
-	fclose(file);
+// 	// Read the file into the buffer
+// 	size_t read_size = fread(buffer, 1, *size, file);
+// 	fclose(file);
 
-	if (read_size != *size) {
-		fprintf(stderr, "Failed to read entire file\n");
-		free(buffer);
-		return NULL;
-	}
+// 	if (read_size != *size) {
+// 		fprintf(stderr, "Failed to read entire file\n");
+// 		free(buffer);
+// 		return NULL;
+// 	}
 
-	return buffer;
-}
+// 	return buffer;
+// }

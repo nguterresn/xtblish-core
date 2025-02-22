@@ -3,7 +3,7 @@ cmake_minimum_required (VERSION 3.20)
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 
 project (wasm-zephyr-ota)
-enable_language(ASM)
+# enable_language(ASM)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
 
@@ -36,7 +36,7 @@ add_custom_command(
   COMMAND npx asc assembly/index.ts --initialMemory 1 --maximumMemory 1 --lowMemoryLimit
 )
 
-target_sources(app PUBLIC ${WAMR_RUNTIME_LIB_SOURCE} application/main.c)
+target_sources(app PRIVATE ${WAMR_RUNTIME_LIB_SOURCE} application/main.c)
 # target_include_directories(app PUBLIC
 #   ${CMAKE_SOURCE_DIR}/libs/wasm-micro-runtime/core/iwasm/include
 #   ${CMAKE_SOURCE_DIR}/libs/wasm-micro-runtime/core/shared/platform/include
