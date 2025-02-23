@@ -1,14 +1,14 @@
+#include "platform_common.h"
 #include "wasm_export.h"
 #include <zephyr/kernel.h>
 #include <zephyr/sys/printk.h>
-#include <zephyr/fs/fs.h>
 #include <zephyr/storage/flash_map.h>
 // #include "wasm_runtime.h"
 // #include "wasm_runtime_common.h"
 #include <stdint.h>
 #include <stdio.h>
 
-static unsigned char* read_wasm_file(const char* filename, size_t* size);
+#define WASM_FILE_ADDRESS 0x00001000 // example for now.
 
 /**
  * @brief Port console.log to the native side. Provide a way to log from WASM
@@ -47,6 +47,12 @@ static RuntimeInitArgs runtime_args = {
 	.gc_heap_size = 0
 };
 
+// struct wasm_file {
+// 	uint32_t* wasm_size;
+// 	uint32_t* wasm_start;
+// 	uint32_t* wasm_version;
+// } __packed;
+
 // static struct fs_mount_t mp = {
 // 	.type        = FS_LITTLEFS,                             // File system type
 // 	.mnt_point   = "/",                                  // Mount point
@@ -67,11 +73,8 @@ int main(void)
 	wasm_runtime_set_log_level(WASM_LOG_LEVEL_VERBOSE);
 
 	/* read WASM file into a memory buffer */
-	uint8_t* wasm_ptr = read_wasm_file("application/assem/build/release.wasm", &wasm_file_size);
-	if (!wasm_ptr) {
-		printk("Failed to read the WASM file\n");
-		return 1;
-	}
+	uint32_t  wasm_size = *(uint32_t*)WASM_FILE_ADDRESS;
+	uint32_t* wasm_ptr  = (uint32_t*)WASM_FILE_ADDRESS + 1;
 
 	// if (!wasm_runtime_register_natives("env",
 	//                                    native_symbols,
@@ -116,6 +119,8 @@ int main(void)
 	// }
 
 	// wasm_runtime_call_wasm(exec_env, func, 0, NULL);
+
+	return 0;
 }
 
 void console_log(wasm_exec_env_t exec_env, const uint16_t* str)
@@ -135,44 +140,3 @@ void _abort(wasm_exec_env_t exec_env, const uint16_t* msg, const uint16_t* filen
 	printk("[Native]: WASM module abort line %d col %d", file_line, col_line);
 }
 
-unsigned char* read_wasm_file(const char* filename, size_t* size)
-{
-	struct fs_file_t file   = { 0 };
-	int              ret    = 0;
-	unsigned char*   buffer = NULL;
-
-	ret = fs_open(&file, filename, FS_O_READ);
-	if (ret < 0) {
-		printk("Failed to open file '%s': %d\n", filename, ret);
-		return NULL;
-	}
-
-	// Get file size
-	ret = fs_seek(&file, 0, FS_SEEK_END);
-	if (!ret) {
-		printk("Failed to jump to the end of the file.");
-		goto close_and_go_back;
-	}
-
-	*size = fs_tell(&file);
-	fs_seek(&file, 0, FS_SEEK_SET);
-
-	// Allocate memory for the entire file
-	buffer = (unsigned char*)k_malloc(*size);
-	if (!buffer) {
-		printk("Failed to allocate memory for file content\n");
-		goto close_and_go_back;
-	}
-
-	// Read the file into the buffer
-	size_t read_size = fs_read(&file, buffer, *size);
-
-	if (read_size != *size) {
-		printk("Failed to read entire file\n");
-		k_free(buffer);
-	}
-
-close_and_go_back:
-	fs_close(&file);
-	return buffer;
-}

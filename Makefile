@@ -21,6 +21,9 @@ ram_report:
 rom_report:
 	west build -b esp32_devkitc_wroom/esp32/procpu -t rom_report > rom_report.txt
 
+flash:
+	/Users/nunonogueira/Projectos/zephyr-projects/wasm-zephyr-ota/.venv/bin/python3.13 /Users/nunonogueira/Projectos/zephyr-projects/modules/hal/espressif/tools/esptool_py/esptool.py --chip auto --baud 115200 --before default_reset --after hard_reset write_flash -u --flash_mode dio --flash_freq 40m --flash_size detect 0x1000 /Users/nunonogueira/Projectos/zephyr-projects/wasm-zephyr-ota/build/zephyr/zephyr.bin
+	
 clean:
 	rm -rf build
 
