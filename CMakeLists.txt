@@ -37,10 +37,6 @@ add_custom_command(
 )
 
 target_sources(app PRIVATE ${WAMR_RUNTIME_LIB_SOURCE} application/main.c)
-# target_include_directories(app PUBLIC
-#   ${CMAKE_SOURCE_DIR}/libs/wasm-micro-runtime/core/iwasm/include
-#   ${CMAKE_SOURCE_DIR}/libs/wasm-micro-runtime/core/shared/platform/include
-# )
 
 # Print app and wasm binary size
 add_custom_command(

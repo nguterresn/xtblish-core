@@ -1,11 +1,14 @@
 #include "wasm_export.h"
-#include "zephyr/kernel.h"
+#include <zephyr/kernel.h>
+#include <zephyr/sys/printk.h>
+#include <zephyr/fs/fs.h>
+#include <zephyr/storage/flash_map.h>
 // #include "wasm_runtime.h"
 // #include "wasm_runtime_common.h"
 #include <stdint.h>
 #include <stdio.h>
 
-// static unsigned char* read_wasm_file(const char* filename, size_t* size);
+static unsigned char* read_wasm_file(const char* filename, size_t* size);
 
 /**
  * @brief Port console.log to the native side. Provide a way to log from WASM
@@ -44,29 +47,36 @@ static RuntimeInitArgs runtime_args = {
 	.gc_heap_size = 0
 };
 
+// static struct fs_mount_t mp = {
+// 	.type        = FS_LITTLEFS,                             // File system type
+// 	.mnt_point   = "/",                                  // Mount point
+// 	.storage_dev = (void*)FLASH_AREA_ID(storage_partition), // Storage backend
+// 	.fs_data     = &lfs_data,                               // File system data
+// };
+
 int main(void)
 {
-	// char   error_buf[256] = { 0 };
-	// uint32 stack_size = 4096, heap_size = 0;
-	// size_t wasm_file_size = 0;
+	char     error_buf[256] = { 0 };
+	uint32_t stack_size = 4096, heap_size = 0;
+	size_t   wasm_file_size = 0;
 
 	bool result = wasm_runtime_full_init(&runtime_args);
 	if (!result) {
-		printf("Failed to initialize the runtime.\n");
+		printk("Failed to initialize the runtime.\n");
 	}
 	wasm_runtime_set_log_level(WASM_LOG_LEVEL_VERBOSE);
 
-	// /* read WASM file into a memory buffer */
-	// uint8_t* wasm_ptr = read_wasm_file("application/assem/build/release.wasm", &wasm_file_size);
-	// if (!wasm_ptr) {
-	// 	printf("Failed to read the WASM file\n");
-	// 	return 1;
-	// }
+	/* read WASM file into a memory buffer */
+	uint8_t* wasm_ptr = read_wasm_file("application/assem/build/release.wasm", &wasm_file_size);
+	if (!wasm_ptr) {
+		printk("Failed to read the WASM file\n");
+		return 1;
+	}
 
 	// if (!wasm_runtime_register_natives("env",
 	//                                    native_symbols,
 	//                                    sizeof(native_symbols) / sizeof(NativeSymbol))) {
-	// 	printf("Failed to export native symbols!");
+	// 	printk("Failed to export native symbols!");
 	// 	return 1;
 	// }
 
@@ -76,7 +86,7 @@ int main(void)
 	//                                          error_buf,
 	//                                          sizeof(error_buf));
 	// if (module == NULL) {
-	// 	printf("Failed to load! Error: %s\n", error_buf);
+	// 	printk("Failed to load! Error: %s\n", error_buf);
 	// 	return 1;
 	// }
 
@@ -87,7 +97,7 @@ int main(void)
 	//                                                           error_buf,
 	//                                                           sizeof(error_buf));
 	// if (module_inst == NULL) {
-	// 	printf("Failed to instantiate! Error: %s\n", error_buf);
+	// 	printk("Failed to instantiate! Error: %s\n", error_buf);
 	// 	return 1;
 	// }
 
@@ -95,13 +105,13 @@ int main(void)
 	// // the WASM binary operations, like i32.add 1 or i32.const 1
 	// wasm_exec_env_t exec_env = wasm_runtime_create_exec_env(module_inst, stack_size);
 	// if (exec_env == NULL) {
-	// 	printf("Failed to create the environment!\n");
+	// 	printk("Failed to create the environment!\n");
 	// 	return 1;
 	// }
 
 	// wasm_function_inst_t func = wasm_runtime_lookup_function(module_inst, "hello_world");
 	// if (func == NULL) {
-	// 	printf("Failed to look up for 'hello_world'\n");
+	// 	printk("Failed to look up for 'hello_world'\n");
 	// 	return 1;
 	// }
 
@@ -110,51 +120,59 @@ int main(void)
 
 void console_log(wasm_exec_env_t exec_env, const uint16_t* str)
 {
-	printf("[Native]: ");
+	printk("[Native]: ");
 	while (*str) {
-		printf("%c", (char)*str);
+		printk("%c", (char)*str);
 		str++;
 	}
 
-	printf("\n");
+	printk("\n");
 }
 
 void _abort(wasm_exec_env_t exec_env, const uint16_t* msg, const uint16_t* filename,
             uint32_t file_line, uint32_t col_line)
 {
-	printf("[Native]: WASM module abort line %d col %d", file_line, col_line);
+	printk("[Native]: WASM module abort line %d col %d", file_line, col_line);
 }
 
-// unsigned char* read_wasm_file(const char* filename, size_t* size)
-// {
-// 	FILE* file = fopen(filename, "rb");
-// 	if (!file) {
-// 		fprintf(stderr, "Failed to open file '%s': %s\n", filename, strerror(errno));
-// 		return NULL;
-// 	}
+unsigned char* read_wasm_file(const char* filename, size_t* size)
+{
+	struct fs_file_t file   = { 0 };
+	int              ret    = 0;
+	unsigned char*   buffer = NULL;
 
-// 	// Get file size
-// 	fseek(file, 0, SEEK_END);
-// 	*size = ftell(file);
-// 	fseek(file, 0, SEEK_SET);
+	ret = fs_open(&file, filename, FS_O_READ);
+	if (ret < 0) {
+		printk("Failed to open file '%s': %d\n", filename, ret);
+		return NULL;
+	}
 
-// 	// Allocate memory for the entire file
-// 	unsigned char* buffer = (unsigned char*)malloc(*size);
-// 	if (!buffer) {
-// 		fprintf(stderr, "Failed to allocate memory for file content\n");
-// 		fclose(file);
-// 		return NULL;
-// 	}
+	// Get file size
+	ret = fs_seek(&file, 0, FS_SEEK_END);
+	if (!ret) {
+		printk("Failed to jump to the end of the file.");
+		goto close_and_go_back;
+	}
 
-// 	// Read the file into the buffer
-// 	size_t read_size = fread(buffer, 1, *size, file);
-// 	fclose(file);
+	*size = fs_tell(&file);
+	fs_seek(&file, 0, FS_SEEK_SET);
 
-// 	if (read_size != *size) {
-// 		fprintf(stderr, "Failed to read entire file\n");
-// 		free(buffer);
-// 		return NULL;
-// 	}
+	// Allocate memory for the entire file
+	buffer = (unsigned char*)k_malloc(*size);
+	if (!buffer) {
+		printk("Failed to allocate memory for file content\n");
+		goto close_and_go_back;
+	}
 
-// 	return buffer;
-// }
+	// Read the file into the buffer
+	size_t read_size = fs_read(&file, buffer, *size);
+
+	if (read_size != *size) {
+		printk("Failed to read entire file\n");
+		k_free(buffer);
+	}
+
+close_and_go_back:
+	fs_close(&file);
+	return buffer;
+}
