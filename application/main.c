@@ -1,4 +1,3 @@
-#include "platform_common.h"
 #include "wasm_export.h"
 #include <zephyr/kernel.h>
 #include <zephyr/sys/printk.h>
@@ -8,8 +7,7 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#define WASM_FILE_ADDRESS 0x00001000 // example for now.
-
+uint32_t get_file_size(uint8_t* ptr);
 /**
  * @brief Port console.log to the native side. Provide a way to log from WASM
  * modules.
@@ -47,34 +45,48 @@ static RuntimeInitArgs runtime_args = {
 	.gc_heap_size = 0
 };
 
+static uint32_t wasm_file[6144] = { 0 };
+
 // struct wasm_file {
 // 	uint32_t* wasm_size;
 // 	uint32_t* wasm_start;
 // 	uint32_t* wasm_version;
 // } __packed;
 
-// static struct fs_mount_t mp = {
-// 	.type        = FS_LITTLEFS,                             // File system type
-// 	.mnt_point   = "/",                                  // Mount point
-// 	.storage_dev = (void*)FLASH_AREA_ID(storage_partition), // Storage backend
-// 	.fs_data     = &lfs_data,                               // File system data
-// };
-
 int main(void)
 {
 	char     error_buf[256] = { 0 };
 	uint32_t stack_size = 4096, heap_size = 0;
 	size_t   wasm_file_size = 0;
+	// Aligned 4 means it has to start at an address multiple of 4, e.g. 0x1000 or 0x1004
 
-	bool result = wasm_runtime_full_init(&runtime_args);
-	if (!result) {
-		printk("Failed to initialize the runtime.\n");
-	}
-	wasm_runtime_set_log_level(WASM_LOG_LEVEL_VERBOSE);
+	// bool result = wasm_runtime_full_init(&runtime_args);
+	// if (!result) {
+	// 	printk("Failed to initialize the runtime.\n");
+	// }
+	// wasm_runtime_set_log_level(WASM_LOG_LEVEL_VERBOSE);
+	printk("Hello World!\n");
 
 	/* read WASM file into a memory buffer */
-	uint32_t  wasm_size = *(uint32_t*)WASM_FILE_ADDRESS;
-	uint32_t* wasm_ptr  = (uint32_t*)WASM_FILE_ADDRESS + 1;
+
+	const struct flash_area* wasm_area = NULL;
+	int err = flash_area_open(FIXED_PARTITION_ID(storage_partition), &wasm_area);
+	if (err) {
+		printk("Error while opening flash partition 'storage_partition'");
+		return 1;
+	}
+	printk("Part offset %u part size %u\n",
+	       (uint32_t)wasm_area->fa_off,
+	       (uint32_t)wasm_area->fa_size);
+
+	err = flash_area_read(wasm_area, 0, wasm_file, wasm_area->fa_size);
+	if (err) {
+		printk("Error while reading the partition. %d \n", err);
+		return 1;
+	}
+
+	uint32_t wasm_size = get_file_size((uint8_t*)wasm_file);
+	printk("WASM first word: %u\n size: %u", *(uint32_t*)wasm_file, wasm_size);
 
 	// if (!wasm_runtime_register_natives("env",
 	//                                    native_symbols,
@@ -140,3 +152,14 @@ void _abort(wasm_exec_env_t exec_env, const uint16_t* msg, const uint16_t* filen
 	printk("[Native]: WASM module abort line %d col %d", file_line, col_line);
 }
 
+uint32_t get_file_size(uint8_t* ptr)
+{
+	uint32_t file_size = 0;
+
+	while (*ptr != 0xFF) { // Assuming unused flash is 0xFF
+		file_size++;
+		ptr++;
+	}
+
+	return file_size;
+}

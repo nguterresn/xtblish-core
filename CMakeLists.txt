@@ -25,15 +25,27 @@ include(wasm.cmake) # Include WASM related CMake variables.
 set(WAMR_ROOT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/libs/wasm-micro-runtime)
 include (${WAMR_ROOT_DIR}/build-scripts/runtime_lib.cmake)
 
-# The target 'generate_wasm' requires WASM_OUTPUT, so if it doesn't exist,
-# the next command will generate it.
+# Compile Assembly Script and generate release.wasm #
+
+file(GLOB TS_FILES ${CMAKE_SOURCE_DIR}/application/assem/assembly/*.ts)
 set(WASM_OUTPUT ${CMAKE_SOURCE_DIR}/application/build/release.wasm)
-add_custom_target(generate_wasm ALL DEPENDS ${WASM_OUTPUT})
+set(WASM_AS_INDEX ${CMAKE_SOURCE_DIR}/application/assem/assembly/index.ts)
 add_custom_command(
   OUTPUT ${WASM_OUTPUT}
+  DEPENDS ${TS_FILES}
   COMMENT "Compiling AssemblyScript to WASM."
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/application/assem
-  COMMAND npx asc assembly/index.ts --initialMemory 1 --maximumMemory 1 --lowMemoryLimit
+  COMMAND npx asc ${WASM_AS_INDEX}
+)
+
+# Take the release.wasm and use it to create another binary file #
+
+set(BINARY_OUTPUT ${CMAKE_BINARY_DIR}/wasm.bin)
+add_custom_command(
+  OUTPUT ${BINARY_OUTPUT}
+  DEPENDS ${WASM_OUTPUT}
+  COMMENT "Creating the binary file for WASM"
+  COMMAND python3 ${CMAKE_SOURCE_DIR}/scripts/create_binary.py -i ${WASM_OUTPUT} -o ${BINARY_OUTPUT}
 )
 
 target_sources(app PRIVATE ${WAMR_RUNTIME_LIB_SOURCE} application/main.c)
