@@ -2,12 +2,9 @@
 #include <zephyr/kernel.h>
 #include <zephyr/sys/printk.h>
 #include <zephyr/storage/flash_map.h>
-// #include "wasm_runtime.h"
-// #include "wasm_runtime_common.h"
 #include <stdint.h>
 #include <stdio.h>
 
-uint32_t get_file_size(uint8_t* ptr);
 /**
  * @brief Port console.log to the native side. Provide a way to log from WASM
  * modules.
@@ -50,19 +47,15 @@ static uint32_t wasm_file[6144] = { 0 };
 
 struct wasm_file {
 	uint32_t size;
-
-	union {
-		uint32_t prefix;
-		void*    content;
-	};
-
+	uint32_t prefix;
 	uint32_t version;
 };
 
 int main(void)
 {
-	char     error_buf[256] = { 0 };
-	uint32_t stack_size = 4096, heap_size = 0;
+	char                     error_buf[128] = { 0 };
+	uint32_t                 stack_size = 4096, heap_size = 0;
+	const struct flash_area* wasm_area = NULL;
 
 	bool result = wasm_runtime_full_init(&runtime_args);
 	if (!result) {
@@ -70,7 +63,6 @@ int main(void)
 	}
 	wasm_runtime_set_log_level(WASM_LOG_LEVEL_VERBOSE);
 
-	const struct flash_area* wasm_area = NULL;
 	int err = flash_area_open(FIXED_PARTITION_ID(storage_partition), &wasm_area);
 	if (err) {
 		printk("Error while opening flash partition 'storage_partition'");
@@ -88,13 +80,6 @@ int main(void)
 
 	struct wasm_file* file = (struct wasm_file*)wasm_file;
 
-	printk("Size: %u prefix %u version %u\n sizeAdd: %p contentAddr: %p",
-	       file->size,
-	       file->prefix,
-	       file->version,
-	       &file->size,
-	       &file->content);
-
 	if (!wasm_runtime_register_natives("env",
 	                                   native_symbols,
 	                                   sizeof(native_symbols) / sizeof(NativeSymbol))) {
@@ -103,7 +88,7 @@ int main(void)
 	}
 
 	// /* parse the WASM file from buffer and create a WASM module */
-	wasm_module_t module = wasm_runtime_load((uint8_t*)&file->content,
+	wasm_module_t module = wasm_runtime_load((uint8_t*)&file->prefix,
 	                                         file->size,
 	                                         error_buf,
 	                                         sizeof(error_buf));
@@ -138,7 +123,6 @@ int main(void)
 	}
 
 	wasm_runtime_call_wasm(exec_env, func, 0, NULL);
-
 	return 0;
 }
 
@@ -157,16 +141,4 @@ void _abort(wasm_exec_env_t exec_env, const uint16_t* msg, const uint16_t* filen
             uint32_t file_line, uint32_t col_line)
 {
 	printk("[Native]: WASM module abort line %d col %d", file_line, col_line);
-}
-
-uint32_t get_file_size(uint8_t* ptr)
-{
-	uint32_t file_size = 0;
-
-	while (*ptr != 0xFF) { // Assuming unused flash is 0xFF
-		file_size++;
-		ptr++;
-	}
-
-	return file_size;
 }
