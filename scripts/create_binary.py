@@ -1,6 +1,5 @@
 import argparse
 
-
 def create_bin_file_with_length(input_wasm_path, output_bin_path):
     # Read the .wasm file
     with open(input_wasm_path, "rb") as wasm_file:

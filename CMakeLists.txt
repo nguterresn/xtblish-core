@@ -22,14 +22,16 @@ endif()
 
 include(wasm.cmake) # Include WASM related CMake variables.
 
-set(WAMR_ROOT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/libs/wasm-micro-runtime)
+set(WAMR_ROOT_DIR ${CMAKE_SOURCE_DIR}/libs/wasm-micro-runtime)
 include (${WAMR_ROOT_DIR}/build-scripts/runtime_lib.cmake)
 
 # Compile Assembly Script and generate release.wasm #
 
 file(GLOB TS_FILES ${CMAKE_SOURCE_DIR}/application/assem/assembly/*.ts)
-set(WASM_OUTPUT ${CMAKE_SOURCE_DIR}/application/build/release.wasm)
+set(WASM_OUTPUT ${CMAKE_SOURCE_DIR}/application/assem/build/release.wasm)
 set(WASM_AS_INDEX ${CMAKE_SOURCE_DIR}/application/assem/assembly/index.ts)
+
+add_custom_target(rel-wasm ALL DEPENDS ${WASM_OUTPUT})
 add_custom_command(
   OUTPUT ${WASM_OUTPUT}
   DEPENDS ${TS_FILES}
@@ -41,6 +43,8 @@ add_custom_command(
 # Take the release.wasm and use it to create another binary file #
 
 set(BINARY_OUTPUT ${CMAKE_BINARY_DIR}/wasm.bin)
+
+add_custom_target(wasm-bin ALL DEPENDS ${BINARY_OUTPUT})
 add_custom_command(
   OUTPUT ${BINARY_OUTPUT}
   DEPENDS ${WASM_OUTPUT}

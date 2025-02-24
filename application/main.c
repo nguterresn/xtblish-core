@@ -21,16 +21,16 @@ static void console_log(wasm_exec_env_t exec_env, const uint16_t* str);
 static void _abort(wasm_exec_env_t exec_env, const uint16_t* msg, const uint16_t* filename,
                    uint32_t file_line, uint32_t col_line);
 
-static const NativeSymbol native_symbols[] = { {
-	                                               "console.log", // the name of WASM function name
-	                                               console_log,   // the native function pointer
-	                                               "($)" // the function prototype signature
-	                                           },
-	                                           {
-	                                               "abort", // the name of WASM function name
-	                                               _abort,  // the native function pointer
-	                                               "($$ii)" // the function prototype signature
-	                                           } };
+static NativeSymbol native_symbols[] = { {
+	                                         "console.log", // the name of WASM function name
+	                                         console_log,   // the native function pointer
+	                                         "($)"          // the function prototype signature
+	                                     },
+	                                     {
+	                                         "abort", // the name of WASM function name
+	                                         _abort,  // the native function pointer
+	                                         "($$ii)" // the function prototype signature
+	                                     } };
 
 static RuntimeInitArgs runtime_args = {
 	.mem_alloc_type = Alloc_With_Allocator,
@@ -45,29 +45,30 @@ static RuntimeInitArgs runtime_args = {
 	.gc_heap_size = 0
 };
 
+// Storage partition has size of 0x6000, thus 6144 words.
 static uint32_t wasm_file[6144] = { 0 };
 
-// struct wasm_file {
-// 	uint32_t* wasm_size;
-// 	uint32_t* wasm_start;
-// 	uint32_t* wasm_version;
-// } __packed;
+struct wasm_file {
+	uint32_t size;
+
+	union {
+		uint32_t prefix;
+		void*    content;
+	};
+
+	uint32_t version;
+};
 
 int main(void)
 {
 	char     error_buf[256] = { 0 };
 	uint32_t stack_size = 4096, heap_size = 0;
-	size_t   wasm_file_size = 0;
-	// Aligned 4 means it has to start at an address multiple of 4, e.g. 0x1000 or 0x1004
 
-	// bool result = wasm_runtime_full_init(&runtime_args);
-	// if (!result) {
-	// 	printk("Failed to initialize the runtime.\n");
-	// }
-	// wasm_runtime_set_log_level(WASM_LOG_LEVEL_VERBOSE);
-	printk("Hello World!\n");
-
-	/* read WASM file into a memory buffer */
+	bool result = wasm_runtime_full_init(&runtime_args);
+	if (!result) {
+		printk("Failed to initialize the runtime.\n");
+	}
+	wasm_runtime_set_log_level(WASM_LOG_LEVEL_VERBOSE);
 
 	const struct flash_area* wasm_area = NULL;
 	int err = flash_area_open(FIXED_PARTITION_ID(storage_partition), &wasm_area);
@@ -85,52 +86,58 @@ int main(void)
 		return 1;
 	}
 
-	uint32_t wasm_size = get_file_size((uint8_t*)wasm_file);
-	printk("WASM first word: %u\n size: %u", *(uint32_t*)wasm_file, wasm_size);
+	struct wasm_file* file = (struct wasm_file*)wasm_file;
 
-	// if (!wasm_runtime_register_natives("env",
-	//                                    native_symbols,
-	//                                    sizeof(native_symbols) / sizeof(NativeSymbol))) {
-	// 	printk("Failed to export native symbols!");
-	// 	return 1;
-	// }
+	printk("Size: %u prefix %u version %u\n sizeAdd: %p contentAddr: %p",
+	       file->size,
+	       file->prefix,
+	       file->version,
+	       &file->size,
+	       &file->content);
 
-	// // /* parse the WASM file from buffer and create a WASM module */
-	// wasm_module_t module = wasm_runtime_load(wasm_ptr,
-	//                                          wasm_file_size,
-	//                                          error_buf,
-	//                                          sizeof(error_buf));
-	// if (module == NULL) {
-	// 	printk("Failed to load! Error: %s\n", error_buf);
-	// 	return 1;
-	// }
+	if (!wasm_runtime_register_natives("env",
+	                                   native_symbols,
+	                                   sizeof(native_symbols) / sizeof(NativeSymbol))) {
+		printk("Failed to export native symbols!");
+		return 1;
+	}
 
-	// /* create an instance of the WASM module (WASM linear memory is ready) */
-	// wasm_module_inst_t module_inst = wasm_runtime_instantiate(module,
-	//                                                           0, // May be ignored.
-	//                                                           heap_size,
-	//                                                           error_buf,
-	//                                                           sizeof(error_buf));
-	// if (module_inst == NULL) {
-	// 	printk("Failed to instantiate! Error: %s\n", error_buf);
-	// 	return 1;
-	// }
+	// /* parse the WASM file from buffer and create a WASM module */
+	wasm_module_t module = wasm_runtime_load((uint8_t*)&file->content,
+	                                         file->size,
+	                                         error_buf,
+	                                         sizeof(error_buf));
+	if (module == NULL) {
+		printk("Failed to load! Error: %s\n", error_buf);
+		return 1;
+	}
 
-	// // The stack size is the amount of memory necessary to store
-	// // the WASM binary operations, like i32.add 1 or i32.const 1
-	// wasm_exec_env_t exec_env = wasm_runtime_create_exec_env(module_inst, stack_size);
-	// if (exec_env == NULL) {
-	// 	printk("Failed to create the environment!\n");
-	// 	return 1;
-	// }
+	/* create an instance of the WASM module (WASM linear memory is ready) */
+	wasm_module_inst_t module_inst = wasm_runtime_instantiate(module,
+	                                                          0, // May be ignored.
+	                                                          heap_size,
+	                                                          error_buf,
+	                                                          sizeof(error_buf));
+	if (module_inst == NULL) {
+		printk("Failed to instantiate! Error: %s\n", error_buf);
+		return 1;
+	}
 
-	// wasm_function_inst_t func = wasm_runtime_lookup_function(module_inst, "hello_world");
-	// if (func == NULL) {
-	// 	printk("Failed to look up for 'hello_world'\n");
-	// 	return 1;
-	// }
+	// The stack size is the amount of memory necessary to store
+	// the WASM binary operations, like i32.add 1 or i32.const 1
+	wasm_exec_env_t exec_env = wasm_runtime_create_exec_env(module_inst, stack_size);
+	if (exec_env == NULL) {
+		printk("Failed to create the environment!\n");
+		return 1;
+	}
 
-	// wasm_runtime_call_wasm(exec_env, func, 0, NULL);
+	wasm_function_inst_t func = wasm_runtime_lookup_function(module_inst, "hello_world");
+	if (func == NULL) {
+		printk("Failed to look up for 'hello_world'\n");
+		return 1;
+	}
+
+	wasm_runtime_call_wasm(exec_env, func, 0, NULL);
 
 	return 0;
 }
