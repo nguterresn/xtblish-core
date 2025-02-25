@@ -1,5 +1,6 @@
 #include "wasm.h"
 #include "wasm_export.h"
+#include <sys/errno.h>
 #include <zephyr/kernel.h>
 #include <zephyr/sys/printk.h>
 #include <zephyr/storage/flash_map.h>
@@ -7,14 +8,14 @@
 #include "bindings.h"
 
 static NativeSymbol native_symbols[] = { {
-	                                         "console.log", // the name of WASM function name
-	                                         console_log,   // the native function pointer
-	                                         "($)"          // the function prototype signature
+	                                         "console.log",  // the name of WASM function name
+	                                         bd_console_log, // the native function pointer
+	                                         "($)"           // the function prototype signature
 	                                     },
 	                                     {
-	                                         "abort", // the name of WASM function name
-	                                         _abort,  // the native function pointer
-	                                         "($$ii)" // the function prototype signature
+	                                         "abort",  // the name of WASM function name
+	                                         bd_abort, // the native function pointer
+	                                         "($$ii)"  // the function prototype signature
 	                                     } };
 
 static RuntimeInitArgs runtime_args = {
@@ -53,7 +54,7 @@ int wasm_boot_app(void)
 		printk("Failed to initialize the runtime.\n");
 		return -EPERM;
 	}
-	wasm_runtime_set_log_level(WASM_LOG_LEVEL_VERBOSE);
+	// wasm_runtime_set_log_level(WASM_LOG_LEVEL_VERBOSE);
 
 	error = flash_area_open(FIXED_PARTITION_ID(storage_partition), &wasm_area);
 	if (error) {
@@ -86,7 +87,7 @@ int wasm_boot_app(void)
 	                                         sizeof(error_buf));
 	if (module == NULL) {
 		printk("Failed to load! Error: %s\n", error_buf);
-		return 1;
+		return -EPERM;
 	}
 
 	/* create an instance of the WASM module (WASM linear memory is ready) */
