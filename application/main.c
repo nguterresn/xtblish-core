@@ -1,9 +1,7 @@
-#include "wasm_export.h"
+#include "wasm/wasm.h"
 #include <zephyr/kernel.h>
 #include <zephyr/sys/printk.h>
 #include <zephyr/storage/flash_map.h>
-#include <stdint.h>
-#include <stdio.h>
 
 /**
  * @brief Port console.log to the native side. Provide a way to log from WASM
@@ -13,132 +11,9 @@
  * @param exec_env
  * @param str UTF-16 string
  */
-static void console_log(wasm_exec_env_t exec_env, const uint16_t* str);
-
-static void _abort(wasm_exec_env_t exec_env, const uint16_t* msg, const uint16_t* filename,
-                   uint32_t file_line, uint32_t col_line);
-
-static NativeSymbol native_symbols[] = { {
-	                                         "console.log", // the name of WASM function name
-	                                         console_log,   // the native function pointer
-	                                         "($)"          // the function prototype signature
-	                                     },
-	                                     {
-	                                         "abort", // the name of WASM function name
-	                                         _abort,  // the native function pointer
-	                                         "($$ii)" // the function prototype signature
-	                                     } };
-
-static RuntimeInitArgs runtime_args = {
-	.mem_alloc_type = Alloc_With_Allocator,
-	.mem_alloc_option = {
-		.allocator = {
-			.malloc_func = k_malloc,
-			.realloc_func= k_realloc,
-			.free_func = k_free,
-		}
-	},
-	.n_native_symbols = 0,
-	.gc_heap_size = 0
-};
-
-// Storage partition has size of 0x6000, thus 6144 words.
-static uint32_t wasm_file[6144] = { 0 };
-
-struct wasm_file {
-	uint32_t size;
-	uint32_t prefix;
-	uint32_t version;
-};
 
 int main(void)
 {
-	char                     error_buf[128] = { 0 };
-	uint32_t                 stack_size = 4096, heap_size = 0;
-	const struct flash_area* wasm_area = NULL;
-
-	bool result = wasm_runtime_full_init(&runtime_args);
-	if (!result) {
-		printk("Failed to initialize the runtime.\n");
-	}
-	wasm_runtime_set_log_level(WASM_LOG_LEVEL_VERBOSE);
-
-	int err = flash_area_open(FIXED_PARTITION_ID(storage_partition), &wasm_area);
-	if (err) {
-		printk("Error while opening flash partition 'storage_partition'");
-		return 1;
-	}
-	printk("Part offset %u part size %u\n",
-	       (uint32_t)wasm_area->fa_off,
-	       (uint32_t)wasm_area->fa_size);
-
-	err = flash_area_read(wasm_area, 0, wasm_file, wasm_area->fa_size);
-	if (err) {
-		printk("Error while reading the partition. %d \n", err);
-		return 1;
-	}
-
-	struct wasm_file* file = (struct wasm_file*)wasm_file;
-
-	if (!wasm_runtime_register_natives("env",
-	                                   native_symbols,
-	                                   sizeof(native_symbols) / sizeof(NativeSymbol))) {
-		printk("Failed to export native symbols!");
-		return 1;
-	}
-
-	// /* parse the WASM file from buffer and create a WASM module */
-	wasm_module_t module = wasm_runtime_load((uint8_t*)&file->prefix,
-	                                         file->size,
-	                                         error_buf,
-	                                         sizeof(error_buf));
-	if (module == NULL) {
-		printk("Failed to load! Error: %s\n", error_buf);
-		return 1;
-	}
-
-	/* create an instance of the WASM module (WASM linear memory is ready) */
-	wasm_module_inst_t module_inst = wasm_runtime_instantiate(module,
-	                                                          0, // May be ignored.
-	                                                          heap_size,
-	                                                          error_buf,
-	                                                          sizeof(error_buf));
-	if (module_inst == NULL) {
-		printk("Failed to instantiate! Error: %s\n", error_buf);
-		return 1;
-	}
-
-	// The stack size is the amount of memory necessary to store
-	// the WASM binary operations, like i32.add 1 or i32.const 1
-	wasm_exec_env_t exec_env = wasm_runtime_create_exec_env(module_inst, stack_size);
-	if (exec_env == NULL) {
-		printk("Failed to create the environment!\n");
-		return 1;
-	}
-
-	wasm_function_inst_t func = wasm_runtime_lookup_function(module_inst, "hello_world");
-	if (func == NULL) {
-		printk("Failed to look up for 'hello_world'\n");
-		return 1;
-	}
-
-	wasm_runtime_call_wasm(exec_env, func, 0, NULL);
+	wasm_boot_app();
 	return 0;
-}
-
-void console_log(wasm_exec_env_t exec_env, const uint16_t* str)
-{
-	printk("[Native]: ");
-	while (*str) {
-		printk("%c", (char)*str);
-		str++;
-	}
-
-	printk("\n");
-}
-
-void _abort(wasm_exec_env_t exec_env, const uint16_t* msg, const uint16_t* filename,
-            uint32_t file_line, uint32_t col_line)
-{
-	printk("[Native]: WASM module abort line %d col %d", file_line, col_line);
 }

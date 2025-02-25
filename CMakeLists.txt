@@ -52,7 +52,12 @@ add_custom_command(
   COMMAND python3 ${CMAKE_SOURCE_DIR}/scripts/create_binary.py -i ${WASM_OUTPUT} -o ${BINARY_OUTPUT}
 )
 
-target_sources(app PRIVATE ${WAMR_RUNTIME_LIB_SOURCE} application/main.c)
+target_sources(app PRIVATE ${WAMR_RUNTIME_LIB_SOURCE}
+  application/main.c
+  application/wasm/wasm.c
+  application/wasm/bindings.c
+)
+target_include_directories(app PRIVATE ${CMAKE_SOURCE_DIR}/application/wasm)
 
 # Print app and wasm binary size
 add_custom_command(
