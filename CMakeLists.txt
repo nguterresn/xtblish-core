@@ -56,8 +56,9 @@ target_sources(app PRIVATE ${WAMR_RUNTIME_LIB_SOURCE}
   application/main.c
   application/wasm/wasm.c
   application/wasm/bindings.c
+  application/network/http.c
 )
-target_include_directories(app PRIVATE ${CMAKE_SOURCE_DIR}/application/wasm)
+target_include_directories(app PRIVATE ${CMAKE_SOURCE_DIR}/application/wasm ${CMAKE_SOURCE_DIR}/application/network)
 
 # Print app and wasm binary size
 add_custom_command(

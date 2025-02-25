@@ -10,7 +10,7 @@ run: build
 	./build/app
 
 zephyr:
-	west build -b esp32_devkitc_wroom/esp32/procpu
+	west build -b esp32_devkitc_wroom/esp32/procpu -p always
 
 menuconfig:
 	west build -b esp32_devkitc_wroom/esp32/procpu -t menuconfig
