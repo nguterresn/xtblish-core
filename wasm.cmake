@@ -18,6 +18,7 @@ set (WAMR_BUILD_LIBC_BUILTIN 0)
 # Disable libc wasi support by default
 set (WAMR_BUILD_LIBC_WASI 0)
 # NOTE: the fast interpreter runs ~2X faster than classic interpreter, but consumes about 2X memory to hold the pre-compiled code.
+# set (WAMR_BUILD_FAST_INTERP 1)
 set (WAMR_BUILD_FAST_INTERP 1)
 
 set (WAMR_BUILD_MULTI_MODULE 0)

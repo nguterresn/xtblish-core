@@ -3,11 +3,7 @@
 #include <sys/_intsup.h>
 #include <zephyr/kernel.h>
 #include <zephyr/net/wifi_mgmt.h>
-
-#define NET_EVENT_WIFI_MASK                                               \
-	(NET_EVENT_WIFI_CONNECT_RESULT | NET_EVENT_WIFI_DISCONNECT_RESULT |   \
-	 NET_EVENT_WIFI_AP_ENABLE_RESULT | NET_EVENT_WIFI_AP_DISABLE_RESULT | \
-	 NET_EVENT_WIFI_AP_STA_CONNECTED | NET_EVENT_WIFI_AP_STA_DISCONNECTED)
+#include <zephyr/sys/printk.h>
 
 #if !defined(WIFI_SSID) || !defined(WIFI_PSK)
 #error "Define the WiFi credentials!"
@@ -15,22 +11,29 @@
 
 static void wifi_event_handler(struct net_mgmt_event_callback* cb, uint32_t mgmt_event,
                                struct net_if* iface);
-static struct net_mgmt_event_callback cb = { 0 };
 
-void wifi_init()
+static struct net_mgmt_event_callback cb;
+struct k_sem                          wifi_sem;
+
+int wifi_init()
 {
-	net_mgmt_init_event_callback(&cb, wifi_event_handler, NET_EVENT_WIFI_MASK);
+	int error = k_sem_init(&wifi_sem, 0, 1);
+	if (error) {
+		return error;
+	}
+
+	net_mgmt_init_event_callback(&cb,
+	                             wifi_event_handler,
+	                             NET_EVENT_WIFI_CONNECT_RESULT | NET_EVENT_WIFI_DISCONNECT_RESULT |
+	                                 NET_EVENT_IPV4_ADDR_ADD);
 	net_mgmt_add_event_callback(&cb);
+
+	return 0;
 }
 
 int wifi_connect(void)
 {
-	struct net_if* iface = net_if_get_default();
-	if (iface == NULL) {
-		printk("Network interface is not defined!\n");
-		return -EPERM;
-	}
-
+	struct net_if*                 iface       = net_if_get_default();
 	struct wifi_connect_req_params wifi_params = { 0 };
 
 	wifi_params.ssid        = WIFI_SSID;
@@ -48,36 +51,38 @@ int wifi_connect(void)
 	             iface,
 	             &wifi_params,
 	             sizeof(struct wifi_connect_req_params))) {
-		printk("WiFi Connection Request Failed\n");
+		return -1;
 	}
+
+	return 0;
 }
 
 static void wifi_event_handler(struct net_mgmt_event_callback* cb, uint32_t mgmt_event,
                                struct net_if* iface)
 {
+	char buf[NET_IPV4_ADDR_LEN];
+
 	switch (mgmt_event) {
 	case NET_EVENT_WIFI_CONNECT_RESULT:
-		{
-			printk("Connected to %s", WIFI_SSID);
-			break;
-		}
+		printk("Connected to %s\n", WIFI_SSID);
+		break;
+
 	case NET_EVENT_WIFI_DISCONNECT_RESULT:
-		{
-			printk("Disconnected from %s", WIFI_SSID);
-			break;
-		}
-	case NET_EVENT_WIFI_AP_ENABLE_RESULT:
-		{
-			printk("AP Mode is enabled. Waiting for station to connect");
-			break;
-		}
-	case NET_EVENT_WIFI_AP_DISABLE_RESULT:
-		{
-			printk("AP Mode is disabled.");
-			break;
-		}
+		printk("Disconnected from %s\n", WIFI_SSID);
+		break;
+
+	case NET_EVENT_IPV4_ADDR_ADD:
+		printk("Interface name: %s\n", iface->config.name);
+		printk("IPv4 address: %s\n",
+		       net_addr_ntop(AF_INET,
+		                     &iface->config.ip.ipv4->unicast[0].ipv4.address,
+		                     buf,
+		                     sizeof(buf)));
+		k_sem_give(&wifi_sem);
+		break;
+
 	default:
-		printk("Other wifi event %d", mgmt_event);
+		printk("Other wifi event %d\n", mgmt_event);
 		break;
 	}
 }

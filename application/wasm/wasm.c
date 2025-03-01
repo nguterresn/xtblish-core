@@ -54,7 +54,7 @@ int wasm_boot_app(void)
 		printk("Failed to initialize the runtime.\n");
 		return -EPERM;
 	}
-	// wasm_runtime_set_log_level(WASM_LOG_LEVEL_VERBOSE);
+	wasm_runtime_set_log_level(WASM_LOG_LEVEL_VERBOSE);
 
 	error = flash_area_open(FIXED_PARTITION_ID(storage_partition), &wasm_area);
 	if (error) {
@@ -116,6 +116,7 @@ int wasm_boot_app(void)
 	}
 
 	if (!wasm_runtime_call_wasm(exec_env, func, 0, NULL)) {
+		printk("Failed to call 'hello_world'\n");
 		return -EPERM;
 	}
 
