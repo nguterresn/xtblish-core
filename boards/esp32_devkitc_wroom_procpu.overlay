@@ -7,3 +7,11 @@
 &wifi {
 	status = "okay";
 };
+
+&esp32_bt_hci {
+	status = "disabled";
+};
+
+&psram0 {
+	status = "okay";
+};
