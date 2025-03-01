@@ -37,7 +37,7 @@ add_custom_command(
   DEPENDS ${TS_FILES}
   COMMENT "Compiling AssemblyScript to WASM."
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/application/assem
-  COMMAND npx asc ${WASM_AS_INDEX} --initialMemory 1 --maximumMemory 1
+  COMMAND npx asc ${WASM_AS_INDEX} --initialMemory 1
 )
 
 # Take the release.wasm and use it to create another binary file #
