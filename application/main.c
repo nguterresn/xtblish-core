@@ -5,7 +5,6 @@
 #include <zephyr/sys/printk.h>
 #include <zephyr/sys/sys_heap.h>
 
-extern struct k_sem     wifi_sem;
 extern struct sys_heap  _system_heap;
 struct sys_memory_stats stats;
 
@@ -19,11 +18,6 @@ int main(void)
 	wifi_init();
 	wifi_connect();
 
-	if (!k_sem_take(&wifi_sem, K_FOREVER)) {
-		// If WiFi hasn't connected, quit.
-		return -1;
-	}
-
 	sys_heap_runtime_stats_get(&_system_heap, &stats);
 
 	printk("\n");
@@ -36,7 +30,7 @@ int main(void)
 
 	wasm_boot_app();
 
-	if (http_init("www.example.com") || http_get("www.example.com", "/")) {
-		return -1;
-	}
+	// if (http_init("www.example.com") || http_get("www.example.com", "/")) {
+	// 	return -1;
+	// }
 }

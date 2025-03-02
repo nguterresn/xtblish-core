@@ -1,6 +1,7 @@
 #include "wifi.h"
 #include "cred.h"
 #include <sys/_intsup.h>
+#include <sys/errno.h>
 #include <zephyr/kernel.h>
 #include <zephyr/net/wifi_mgmt.h>
 #include <zephyr/sys/printk.h>
@@ -12,22 +13,34 @@
 static void wifi_event_handler(struct net_mgmt_event_callback* cb,
                                uint32_t mgmt_event, struct net_if* iface);
 
-static struct net_mgmt_event_callback cb;
-struct k_sem                          wifi_sem;
+static struct net_mgmt_event_callback connection_cb;
+static struct net_mgmt_event_callback ipv4_cb;
+static struct k_sem                   connection_sem;
+static struct k_sem                   ipv4_sem;
 
 int wifi_init()
 {
-	int error = k_sem_init(&wifi_sem, 0, 1);
+	int error = 0;
+
+	error = k_sem_init(&connection_sem, 0, 1);
 	if (error) {
 		return error;
 	}
 
-	net_mgmt_init_event_callback(&cb,
+	error = k_sem_init(&ipv4_sem, 0, 1);
+	if (error) {
+		return error;
+	}
+
+	net_mgmt_init_event_callback(&connection_cb,
 	                             wifi_event_handler,
 	                             NET_EVENT_WIFI_CONNECT_RESULT |
-	                                 NET_EVENT_WIFI_DISCONNECT_RESULT |
-	                                 NET_EVENT_IPV4_ADDR_ADD);
-	net_mgmt_add_event_callback(&cb);
+	                                 NET_EVENT_WIFI_DISCONNECT_RESULT);
+	net_mgmt_init_event_callback(&ipv4_cb,
+	                             wifi_event_handler,
+	                             NET_EVENT_IPV4_ADDR_ADD);
+	net_mgmt_add_event_callback(&connection_cb);
+	net_mgmt_add_event_callback(&ipv4_cb);
 
 	return 0;
 }
@@ -56,6 +69,18 @@ int wifi_connect(void)
 		return -1;
 	}
 
+	if (!k_sem_take(&connection_sem, K_SECONDS(10))) {
+		// If WiFi hasn't connected, quit.
+		printk("Couldn't connect Wifi\n");
+		return -ENOLCK;
+	}
+
+	if (!k_sem_take(&ipv4_sem, K_SECONDS(10))) {
+		// If WiFi hasn't connected, quit.
+		printk("Couldn't get an IP\n");
+		return -ENOLCK;
+	}
+
 	return 0;
 }
 
@@ -67,6 +92,7 @@ static void wifi_event_handler(struct net_mgmt_event_callback* cb,
 	switch (mgmt_event) {
 	case NET_EVENT_WIFI_CONNECT_RESULT:
 		printk("Connected to %s\n", WIFI_SSID);
+		k_sem_give(&connection_sem);
 		break;
 
 	case NET_EVENT_WIFI_DISCONNECT_RESULT:
@@ -80,7 +106,7 @@ static void wifi_event_handler(struct net_mgmt_event_callback* cb,
 		                     &iface->config.ip.ipv4->unicast[0].ipv4.address,
 		                     buf,
 		                     sizeof(buf)));
-		k_sem_give(&wifi_sem);
+		k_sem_give(&ipv4_sem);
 		break;
 
 	default:
