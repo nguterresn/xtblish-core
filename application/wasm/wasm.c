@@ -54,7 +54,7 @@ int wasm_boot_app(void)
 		printk("Failed to initialize the runtime.\n");
 		return -EPERM;
 	}
-	wasm_runtime_set_log_level(WASM_LOG_LEVEL_VERBOSE);
+	// wasm_runtime_set_log_level(WASM_LOG_LEVEL_VERBOSE);
 
 	error = flash_area_open(FIXED_PARTITION_ID(storage_partition), &wasm_area);
 	if (error) {

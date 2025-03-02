@@ -9,8 +9,8 @@
 #error "Define the WiFi credentials!"
 #endif
 
-static void wifi_event_handler(struct net_mgmt_event_callback* cb, uint32_t mgmt_event,
-                               struct net_if* iface);
+static void wifi_event_handler(struct net_mgmt_event_callback* cb,
+                               uint32_t mgmt_event, struct net_if* iface);
 
 static struct net_mgmt_event_callback cb;
 struct k_sem                          wifi_sem;
@@ -24,7 +24,8 @@ int wifi_init()
 
 	net_mgmt_init_event_callback(&cb,
 	                             wifi_event_handler,
-	                             NET_EVENT_WIFI_CONNECT_RESULT | NET_EVENT_WIFI_DISCONNECT_RESULT |
+	                             NET_EVENT_WIFI_CONNECT_RESULT |
+	                                 NET_EVENT_WIFI_DISCONNECT_RESULT |
 	                                 NET_EVENT_IPV4_ADDR_ADD);
 	net_mgmt_add_event_callback(&cb);
 
@@ -51,14 +52,15 @@ int wifi_connect(void)
 	             iface,
 	             &wifi_params,
 	             sizeof(struct wifi_connect_req_params))) {
+		printk("Failed to connected to SSID!\n");
 		return -1;
 	}
 
 	return 0;
 }
 
-static void wifi_event_handler(struct net_mgmt_event_callback* cb, uint32_t mgmt_event,
-                               struct net_if* iface)
+static void wifi_event_handler(struct net_mgmt_event_callback* cb,
+                               uint32_t mgmt_event, struct net_if* iface)
 {
 	char buf[NET_IPV4_ADDR_LEN];
 

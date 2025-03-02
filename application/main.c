@@ -1,3 +1,4 @@
+#include "http.h"
 #include "wasm/wasm.h"
 #include "network/wifi.h"
 #include <zephyr/kernel.h>
@@ -15,11 +16,10 @@ int main(void)
 {
 	printk("\n\n** START **\n\n");
 
-	if (wifi_init() || wifi_connect()) {
-		return -1;
-	}
+	wifi_init();
+	wifi_connect();
 
-	if (!k_sem_take(&wifi_sem, K_SECONDS(10))) {
+	if (!k_sem_take(&wifi_sem, K_FOREVER)) {
 		// If WiFi hasn't connected, quit.
 		return -1;
 	}
@@ -35,4 +35,8 @@ int main(void)
 	printk("Boot WASM app\n");
 
 	wasm_boot_app();
+
+	if (http_init("www.example.com") || http_get("www.example.com", "/")) {
+		return -1;
+	}
 }
