@@ -1,9 +1,11 @@
-#include "http.h"
-#include "wasm/wasm.h"
+// #include "http.h"
+// #include "wasm/wasm.h"
 #include "network/wifi.h"
 #include <zephyr/kernel.h>
+// #include <zephyr/net/net_ip.h>
 #include <zephyr/sys/printk.h>
-#include <zephyr/sys/sys_heap.h>
+// #include <zephyr/sys/sys_heap.h>
+// #include <zephyr/sys/__assert.h>
 
 extern struct sys_heap  _system_heap;
 struct sys_memory_stats stats;
@@ -11,24 +13,30 @@ struct sys_memory_stats stats;
 // Note: https://docs.zephyrproject.org/latest/kernel/services/threads/system_threads.html
 // Above is a brief about the main and the idle thread.
 
+extern struct k_sem connection_sem;
+extern struct k_sem ipv4_sem;
+
 int main(void)
 {
 	printk("\n\n** START **\n\n");
 
-	wifi_init();
+	__ASSERT(wifi_init() == 0, "Failed to initalize wifi_init");
 	wifi_connect();
 
-	sys_heap_runtime_stats_get(&_system_heap, &stats);
+	k_sem_take(&connection_sem, K_FOREVER);
+	k_sem_take(&ipv4_sem, K_FOREVER);
 
-	printk("\n");
-	printk("INFO: Allocated Heap = %zu\n", stats.allocated_bytes);
-	printk("INFO: Free Heap = %zu\n", stats.free_bytes);
-	printk("INFO: Max Allocated Heap = %zu\n", stats.max_allocated_bytes);
-	printk("\n");
+	// sys_heap_runtime_stats_get(&_system_heap, &stats);
+
+	// printk("\n");
+	// printk("INFO: Allocated Heap = %zu\n", stats.allocated_bytes);
+	// printk("INFO: Free Heap = %zu\n", stats.free_bytes);
+	// printk("INFO: Max Allocated Heap = %zu\n", stats.max_allocated_bytes);
+	// printk("\n");
 
 	printk("Boot WASM app\n");
 
-	wasm_boot_app();
+	// wasm_boot_app();
 
 	// if (http_init("www.example.com") || http_get("www.example.com", "/")) {
 	// 	return -1;

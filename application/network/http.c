@@ -1,5 +1,4 @@
 #include "http.h"
-#include <sys/_stdint.h>
 #include <sys/errno.h>
 #include <zephyr/kernel.h>
 #include <zephyr/net/dns_resolve.h>
@@ -21,8 +20,8 @@ static void dns_result_cb(enum dns_resolve_status status,
 static void http_response_cb(struct http_response* rsp,
                              enum http_final_call final_data, void* user_data);
 
-static struct dns_addrinfo* dns_info    = { 0 };
-static int                  http_socket = -1;
+static struct dns_addrinfo dns_info    = { 0 };
+static int                 http_socket = -1;
 
 static struct k_sem dns_sem;
 static struct k_sem http_sem;
@@ -47,16 +46,16 @@ int http_init(const char* hostname)
 		return error;
 	}
 
-	if (!k_sem_take(&dns_sem, K_SECONDS(2))) {
+	if (k_sem_take(&dns_sem, K_SECONDS(2)) < 0) {
 		return -ENOLCK;
 	}
 
-	if (!dns_info->ai_addrlen) {
+	if (!dns_info.ai_addrlen) {
 		return -ENODATA;
 	}
 
 	return connect_socket(AF_INET,
-	                      dns_info->ai_addr.data,
+	                      dns_info.ai_addr.data,
 	                      HTTP_PORT,
 	                      &http_socket,
 	                      (struct sockaddr*)&addr4,
@@ -86,7 +85,7 @@ int http_get(const char* hostname, const char* query)
 		return ret;
 	}
 
-	if (!k_sem_take(&http_sem, K_SECONDS(3))) {
+	if (k_sem_take(&http_sem, K_SECONDS(3)) < 0) {
 		printk("Failed to get a HTTP response!\n");
 		return -ENOLCK;
 	}
@@ -176,7 +175,7 @@ static void dns_result_cb(enum dns_resolve_status status,
 		return;
 	}
 
-	memcpy(dns_info, info, sizeof(struct dns_addrinfo));
+	memcpy(&dns_info, info, sizeof(struct dns_addrinfo));
 	printk("%s %s address: %s",
 	       user_data ? (char*)user_data : "<null>",
 	       hr_family,

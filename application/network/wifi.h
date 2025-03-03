@@ -1,4 +1,4 @@
 #pragma once
 
-int wifi_init(void);
-int wifi_connect(void);
+int  wifi_init(void);
+void wifi_connect(void);
