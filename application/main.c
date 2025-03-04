@@ -11,7 +11,7 @@
 
 // NK_THREAD(_http_thread, 8192, http_thread);
 NK_THREAD(_wifi_thread, 8192, wifi_thread);
-NK_THREAD(_app_thread, 8192, app_thread);
+// NK_THREAD(_app_thread, 8192, app_thread);
 
 // (!) Important Note:
 // Due to the way the Wifi manages the heap, it should be correclty initialized
@@ -19,4 +19,6 @@ NK_THREAD(_app_thread, 8192, app_thread);
 
 int main(void)
 {
+	// app_init
+	// wifi_init
 }
