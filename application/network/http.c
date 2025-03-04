@@ -1,4 +1,5 @@
 #include "http.h"
+#include <errno.h>
 #include <sys/errno.h>
 #include <zephyr/kernel.h>
 #include <zephyr/net/dns_resolve.h>
@@ -12,6 +13,7 @@
 #define EXAMPLE_hostname "http://example.com"
 #define DNS_TIMEOUT      (2 * MSEC_PER_SEC)
 
+static int  http_init(void);
 static int  connect_socket(sa_family_t family, const char* server, int port,
                            int* sock, struct sockaddr* addr, socklen_t addr_len);
 static int  dns_resolve_ipv4(const char* hostname);
@@ -20,53 +22,35 @@ static void dns_result_cb(enum dns_resolve_status status,
 static void http_response_cb(struct http_response* rsp,
                              enum http_final_call final_data, void* user_data);
 
-static struct dns_addrinfo dns_info    = { 0 };
-static int                 http_socket = -1;
+static struct dns_addrinfo dns_info = { 0 };
 
 static struct k_sem dns_sem;
 static struct k_sem http_sem;
 
-int http_init(const char* hostname)
+void http_thread(void* arg1, void* arg2, void* arg3)
 {
-	struct sockaddr_in addr4 = { 0 };
-	int                error = 0;
-
-	error = k_sem_init(&dns_sem, 0, 1);
+	int error = http_init();
 	if (error) {
-		return error;
+		k_thread_abort(NULL);
 	}
 
-	error = k_sem_init(&http_sem, 0, 1);
-	if (error) {
-		return error;
-	}
+	printk("Start 'http_thread'\n");
 
-	error = dns_resolve_ipv4(hostname);
-	if (error) {
-		return error;
-	}
+	for (;;) {
+		k_sleep(K_SECONDS(10));
 
-	if (k_sem_take(&dns_sem, K_SECONDS(2)) < 0) {
-		return -ENOLCK;
+		printk("Attempt to perform a HTTP GET request.\n");
+		http_get("www.example.com", "/");
 	}
-
-	if (!dns_info.ai_addrlen) {
-		return -ENODATA;
-	}
-
-	return connect_socket(AF_INET,
-	                      dns_info.ai_addr.data,
-	                      HTTP_PORT,
-	                      &http_socket,
-	                      (struct sockaddr*)&addr4,
-	                      sizeof(addr4));
 }
 
 int http_get(const char* hostname, const char* query)
 {
-	struct http_request req = { 0 };
+	struct sockaddr_in  addr4  = { 0 };
+	static int          socket = -1;
+	struct http_request req    = { 0 };
 	static uint8_t      recv_buf[512];
-	int                 ret;
+	int                 error;
 
 	req.method       = HTTP_GET;
 	req.url          = query;
@@ -76,21 +60,51 @@ int http_get(const char* hostname, const char* query)
 	req.recv_buf     = recv_buf;
 	req.recv_buf_len = sizeof(recv_buf);
 
-	/* sock is a file descriptor referencing a socket that has been connected
-	* to the HTTP server.
-	*/
-	ret = http_client_req(http_socket, &req, 3000, NULL);
-	if (ret < 0) {
-		printk("Failed to perform an HTTP request!\n");
-		return ret;
+	error = dns_resolve_ipv4(hostname);
+	if (error) {
+		return error;
 	}
 
-	if (k_sem_take(&http_sem, K_SECONDS(3)) < 0) {
-		printk("Failed to get a HTTP response!\n");
+	if (k_sem_take(&dns_sem, K_SECONDS(3))) {
+		printk("Failed to rsolve DNS!\n");
 		return -ENOLCK;
 	}
 
-	return 0;
+	error = connect_socket(AF_INET,
+	                       dns_info.ai_addr.data,
+	                       HTTP_PORT,
+	                       &socket,
+	                       (struct sockaddr*)&addr4,
+	                       sizeof(addr4));
+	if (error < 0) {
+		return error;
+	}
+
+	error = http_client_req(socket, &req, 3000, NULL);
+	if (error < 0) {
+		printk("Failed to perform an HTTP request!\n");
+		goto close_socket;
+	}
+
+	if (k_sem_take(&http_sem, K_SECONDS(3)) < 0) {
+		error = -ENOLCK;
+		printk("Failed to get a HTTP response!\n");
+		goto close_socket;
+	}
+
+close_socket:
+	zsock_close(socket);
+	return error;
+}
+
+static int http_init(void)
+{
+	int error = k_sem_init(&dns_sem, 0, 1);
+	if (error) {
+		return error;
+	}
+
+	return k_sem_init(&http_sem, 0, 1);
 }
 
 static int connect_socket(sa_family_t family, const char* server, int port,
@@ -111,7 +125,7 @@ static int connect_socket(sa_family_t family, const char* server, int port,
 	int ret = connect(*sock, addr, addr_len);
 	if (ret < 0) {
 		printk("Cannot connect to %s remote (%d)", "IPv4", -errno);
-		close(*sock);
+		zsock_close(*sock);
 		*sock = -1;
 		return -errno;
 	}
@@ -121,14 +135,13 @@ static int connect_socket(sa_family_t family, const char* server, int port,
 
 static int dns_resolve_ipv4(const char* hostname)
 {
-	static uint16_t    dns_id = 0;
-	static const char* query  = "www.zephyrproject.org";
+	static uint16_t dns_id = 0;
 
-	int ret = dns_get_addr_info(query,
+	int ret = dns_get_addr_info(hostname,
 	                            DNS_QUERY_TYPE_A,
 	                            &dns_id,
 	                            dns_result_cb,
-	                            NULL,
+	                            (void*)hostname,
 	                            DNS_TIMEOUT);
 	ret < 0 ? printk("Cannot resolve IPv4 address (%d)", ret)
 	        : printk("DNS id %u", dns_id);

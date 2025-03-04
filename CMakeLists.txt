@@ -54,7 +54,11 @@ add_custom_command(
 
 FILE(GLOB_RECURSE app_sources application/*.c)
 target_sources(app PRIVATE ${WAMR_RUNTIME_LIB_SOURCE} ${app_sources})
-target_include_directories(app PRIVATE ${CMAKE_SOURCE_DIR}/application/wasm ${CMAKE_SOURCE_DIR}/application/network)
+target_include_directories(app PRIVATE
+  ${CMAKE_SOURCE_DIR}/application
+  ${CMAKE_SOURCE_DIR}/application/wasm 
+  ${CMAKE_SOURCE_DIR}/application/network
+)
 
 # Print app and wasm binary size
 add_custom_command(
