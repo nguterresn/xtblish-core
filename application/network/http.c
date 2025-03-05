@@ -11,11 +11,11 @@
 
 #define HTTP_PORT        8080
 #define EXAMPLE_hostname "http://example.com"
-#define DNS_TIMEOUT      (2 * MSEC_PER_SEC)
+#define DNS_TIMEOUT      (3 * MSEC_PER_SEC)
 
-static int  http_init(void);
-static int  connect_socket(sa_family_t family, const char* server, int port,
-                           int* sock, struct sockaddr* addr, socklen_t addr_len);
+static int  connect_tcp_socket(sa_family_t family, const char* server, int port,
+                               int* sock, struct sockaddr* addr,
+                               socklen_t addr_len);
 static int  dns_resolve_ipv4(const char* hostname);
 static void dns_result_cb(enum dns_resolve_status status,
                           struct dns_addrinfo* info, void* user_data);
@@ -27,13 +27,18 @@ static struct dns_addrinfo dns_info = { 0 };
 static struct k_sem dns_sem;
 static struct k_sem http_sem;
 
-void http_thread(void* arg1, void* arg2, void* arg3)
+int http_init()
 {
-	int error = http_init();
+	int error = k_sem_init(&dns_sem, 0, 1);
 	if (error) {
-		k_thread_abort(NULL);
+		return error;
 	}
 
+	return k_sem_init(&http_sem, 0, 1);
+}
+
+void http_thread(void* arg1, void* arg2, void* arg3)
+{
 	printk("Start 'http_thread'\n");
 
 	for (;;) {
@@ -46,10 +51,10 @@ void http_thread(void* arg1, void* arg2, void* arg3)
 
 int http_get(const char* hostname, const char* query)
 {
-	struct sockaddr_in  addr4  = { 0 };
-	static int          socket = -1;
-	struct http_request req    = { 0 };
+	struct sockaddr_in  addr4 = { 0 };
+	struct http_request req   = { 0 };
 	static uint8_t      recv_buf[512];
+	static int          socket = -1;
 	int                 error;
 
 	req.method       = HTTP_GET;
@@ -65,17 +70,18 @@ int http_get(const char* hostname, const char* query)
 		return error;
 	}
 
-	if (k_sem_take(&dns_sem, K_SECONDS(3))) {
-		printk("Failed to rsolve DNS!\n");
+	error = k_sem_take(&dns_sem, K_SECONDS(5));
+	if (error < 0) {
+		printk("Failed to resolve DNS [%d]!\n", error);
 		return -ENOLCK;
 	}
 
-	error = connect_socket(AF_INET,
-	                       dns_info.ai_addr.data,
-	                       HTTP_PORT,
-	                       &socket,
-	                       (struct sockaddr*)&addr4,
-	                       sizeof(addr4));
+	error = connect_tcp_socket(AF_INET,
+	                           dns_info.ai_addr.data,
+	                           HTTP_PORT,
+	                           &socket,
+	                           (struct sockaddr*)&addr4,
+	                           sizeof(addr4));
 	if (error < 0) {
 		return error;
 	}
@@ -86,7 +92,7 @@ int http_get(const char* hostname, const char* query)
 		goto close_socket;
 	}
 
-	if (k_sem_take(&http_sem, K_SECONDS(3)) < 0) {
+	if (k_sem_take(&http_sem, K_SECONDS(1)) < 0) {
 		error = -ENOLCK;
 		printk("Failed to get a HTTP response!\n");
 		goto close_socket;
@@ -97,18 +103,9 @@ close_socket:
 	return error;
 }
 
-static int http_init(void)
-{
-	int error = k_sem_init(&dns_sem, 0, 1);
-	if (error) {
-		return error;
-	}
-
-	return k_sem_init(&http_sem, 0, 1);
-}
-
-static int connect_socket(sa_family_t family, const char* server, int port,
-                          int* sock, struct sockaddr* addr, socklen_t addr_len)
+static int connect_tcp_socket(sa_family_t family, const char* server, int port,
+                              int* sock, struct sockaddr* addr,
+                              socklen_t addr_len)
 {
 	memset(addr, 0, addr_len);
 
@@ -122,7 +119,7 @@ static int connect_socket(sa_family_t family, const char* server, int port,
 		return -errno;
 	}
 
-	int ret = connect(*sock, addr, addr_len);
+	int ret = zsock_connect(*sock, addr, addr_len);
 	if (ret < 0) {
 		printk("Cannot connect to %s remote (%d)", "IPv4", -errno);
 		zsock_close(*sock);
@@ -143,8 +140,8 @@ static int dns_resolve_ipv4(const char* hostname)
 	                            dns_result_cb,
 	                            (void*)hostname,
 	                            DNS_TIMEOUT);
-	ret < 0 ? printk("Cannot resolve IPv4 address (%d)", ret)
-	        : printk("DNS id %u", dns_id);
+	ret < 0 ? printk("Cannot resolve IPv4 address (%d)\n", ret)
+	        : printk("DNS id %u\n", dns_id);
 	return ret;
 }
 
@@ -157,21 +154,21 @@ static void dns_result_cb(enum dns_resolve_status status,
 
 	switch (status) {
 	case DNS_EAI_CANCELED:
-		printk("DNS query was canceled");
+		printk("DNS query was canceled\n");
 		return;
 	case DNS_EAI_FAIL:
-		printk("DNS resolve failed");
+		printk("DNS resolve failed\n");
 		return;
 	case DNS_EAI_NODATA:
-		printk("Cannot resolve address");
+		printk("Cannot resolve address\n");
 		return;
 	case DNS_EAI_ALLDONE:
-		printk("DNS resolving finished");
+		printk("DNS resolving finished\n");
 		return;
 	case DNS_EAI_INPROGRESS:
 		break;
 	default:
-		printk("DNS resolving error (%d)", status);
+		printk("DNS resolving error (%d)\n", status);
 		return;
 	}
 
