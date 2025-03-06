@@ -16,16 +16,18 @@
 extern struct sys_heap _system_heap;
 struct k_sem           net_sem;
 
-static void mgmt_event_handler(struct net_mgmt_event_callback*
-                                        event_wifi_result,
-                               uint32_t mgmt_event, struct net_if* iface);
+static struct net_mgmt_event_callback event_wifi = { 0 };
+static struct net_mgmt_event_callback event_net  = { 0 };
 
-static struct net_mgmt_event_callback event_wifi_result = { 0 };
-static struct net_mgmt_event_callback event_ipv4_addr   = { 0 };
-static struct net_mgmt_event_callback event_dns_server  = { 0 };
-static struct sys_memory_stats        stats;
+static struct sys_memory_stats stats;
 
-static int wifi_connect(void)
+static void mgmt_event_net_handler(struct net_mgmt_event_callback* event_wifi,
+                                   uint32_t mgmt_event, struct net_if* iface);
+
+static void mgmt_event_wifi_handler(struct net_mgmt_event_callback* event_wifi,
+                                    uint32_t mgmt_event, struct net_if* iface);
+
+int wifi_connect(void)
 {
 	struct net_if* iface = net_if_get_default();
 
@@ -40,7 +42,9 @@ static int wifi_connect(void)
 		.mfp         = WIFI_MFP_OPTIONAL
 	};
 
-	printk("Connecting to SSID: %s ...\n", wifi_params.ssid);
+	printk("Connecting to SSID: %s Interface: %s \n",
+	       wifi_params.ssid,
+	       iface->config.name);
 
 	if (net_mgmt(NET_REQUEST_WIFI_CONNECT,
 	             iface,
@@ -53,9 +57,48 @@ static int wifi_connect(void)
 	return 0;
 }
 
-static void mgmt_event_handler(struct net_mgmt_event_callback*
-                                        event_wifi_result,
-                               uint32_t mgmt_event, struct net_if* iface)
+static void mgmt_event_net_handler(struct net_mgmt_event_callback* event_wifi,
+                                   uint32_t mgmt_event, struct net_if* iface)
+{
+	char buf[NET_IPV4_ADDR_LEN];
+
+	switch (mgmt_event) {
+	case NET_EVENT_IF_UP:
+		printk("NET_EVENT_IF_UP\n");
+		break;
+
+	case NET_EVENT_IF_DOWN:
+		printk("NET_EVENT_IF_DOWN\n");
+		break;
+
+	case NET_EVENT_L4_CONNECTED:
+		printk("NET_EVENT_L4_CONNECTED\n");
+		break;
+
+	case NET_EVENT_L4_DISCONNECTED:
+		printk("NET_EVENT_L4_DISCONNECTED\n");
+		break;
+
+	case NET_EVENT_DNS_SERVER_ADD:
+		printk("New DNS server added!\n");
+		break;
+
+	case NET_EVENT_IPV4_ADDR_ADD:
+		printk("NET_EVENT_IPV4_ADDR_ADD\n");
+		break;
+
+	case NET_EVENT_IPV4_ADDR_DEL:
+		printk("NET_EVENT_IPV4_ADDR_DEL\n");
+		break;
+
+	default:
+		printk("Other wifi event %d\n", mgmt_event);
+		break;
+	}
+}
+
+static void mgmt_event_wifi_handler(struct net_mgmt_event_callback* event_wifi,
+                                    uint32_t mgmt_event, struct net_if* iface)
 {
 	char buf[NET_IPV4_ADDR_LEN];
 
@@ -66,14 +109,6 @@ static void mgmt_event_handler(struct net_mgmt_event_callback*
 
 	case NET_EVENT_WIFI_DISCONNECT_RESULT:
 		printk("Disconnected from %s\n", WIFI_SSID);
-		break;
-
-	case NET_EVENT_DNS_SERVER_ADD:
-		printk("New server added to DNS bucket %s\n", WIFI_SSID);
-		break;
-
-	case NET_EVENT_IPV4_ADDR_ADD:
-		k_sem_give(&net_sem);
 		break;
 
 	default:
@@ -89,35 +124,32 @@ int wifi_init()
 		return error;
 	}
 
-	net_mgmt_init_event_callback(&event_wifi_result,
-	                             mgmt_event_handler,
+	net_mgmt_init_event_callback(&event_net,
+	                             mgmt_event_net_handler,
+	                             NET_EVENT_IF_DOWN | NET_EVENT_IF_UP |
+	                                 NET_EVENT_IPV4_ADDR_ADD |
+	                                 NET_EVENT_IPV4_ADDR_DEL |
+	                                 NET_EVENT_DNS_SERVER_ADD |
+	                                 NET_EVENT_L4_CONNECTED |
+	                                 NET_EVENT_L4_DISCONNECTED);
+
+	net_mgmt_init_event_callback(&event_wifi,
+	                             mgmt_event_wifi_handler,
 	                             NET_EVENT_WIFI_CONNECT_RESULT |
 	                                 NET_EVENT_WIFI_DISCONNECT_RESULT);
-	net_mgmt_init_event_callback(&event_ipv4_addr,
-	                             mgmt_event_handler,
-	                             NET_EVENT_IPV4_ADDR_ADD);
-	net_mgmt_init_event_callback(&event_ipv4_addr,
-	                             mgmt_event_handler,
-	                             NET_EVENT_DNS_SERVER_ADD);
 
-	net_mgmt_add_event_callback(&event_wifi_result);
-	net_mgmt_add_event_callback(&event_ipv4_addr);
-	net_mgmt_add_event_callback(&event_dns_server);
+	net_mgmt_add_event_callback(&event_net);
+	net_mgmt_add_event_callback(&event_wifi);
 
 	return 0;
 }
 
 void wifi_thread(void* arg1, void* arg2, void* arg3)
 {
-	int error = wifi_connect();
-	if (error) {
-		k_thread_abort(NULL);
-	}
-
 	printk("Start 'wifi_thread'\n");
 
 	for (;;) {
-		k_yield();
+		k_sleep(K_SECONDS(1));
 	}
 }
 
