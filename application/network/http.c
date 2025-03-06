@@ -9,13 +9,13 @@
 #include <zephyr/posix/arpa/inet.h>
 #include <zephyr/sys/printk.h>
 
-#define HTTP_PORT        8080
+#define HTTP_PORT        80
 #define EXAMPLE_hostname "http://example.com"
 #define DNS_TIMEOUT      (3 * MSEC_PER_SEC)
 
-static int  connect_tcp_socket(sa_family_t family, const char* server, int port,
-                               int* sock, struct sockaddr* addr,
-                               socklen_t addr_len);
+static int connect_tcp_socket(sa_family_t family, struct sockaddr_in* addr,
+                              int port, int* sock, socklen_t addr_len);
+
 static int  dns_resolve_ipv4(const char* hostname);
 static void dns_result_cb(enum dns_resolve_status status,
                           struct dns_addrinfo* info, void* user_data);
@@ -77,10 +77,9 @@ int http_get(const char* hostname, const char* query)
 	}
 
 	error = connect_tcp_socket(AF_INET,
-	                           dns_info.ai_addr.data,
+	                           (struct sockaddr_in*)&dns_info.ai_addr,
 	                           HTTP_PORT,
 	                           &socket,
-	                           (struct sockaddr*)&addr4,
 	                           sizeof(addr4));
 	if (error < 0) {
 		return error;
@@ -103,15 +102,19 @@ close_socket:
 	return error;
 }
 
-static int connect_tcp_socket(sa_family_t family, const char* server, int port,
-                              int* sock, struct sockaddr* addr,
-                              socklen_t addr_len)
+static int connect_tcp_socket(sa_family_t family, struct sockaddr_in* addr,
+                              int port, int* sock, socklen_t addr_len)
 {
-	memset(addr, 0, addr_len);
+	addr->sin_family = AF_INET;
+	addr->sin_port   = htons(port);
 
-	net_sin(addr)->sin_family = AF_INET;
-	net_sin(addr)->sin_port   = htons(port);
-	inet_pton(AF_INET, server, &net_sin(addr)->sin_addr);
+	printk("\n\nADDR [%03d:%03d:%03d:%03d] PORT %d FAMILY %d\n\n",
+	       addr->sin_addr.s4_addr[0],
+	       addr->sin_addr.s4_addr[1],
+	       addr->sin_addr.s4_addr[2],
+	       addr->sin_addr.s4_addr[3],
+	       addr->sin_port,
+	       addr->sin_family);
 
 	*sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 	if (*sock < 0) {
@@ -119,7 +122,7 @@ static int connect_tcp_socket(sa_family_t family, const char* server, int port,
 		return -errno;
 	}
 
-	int ret = zsock_connect(*sock, addr, addr_len);
+	int ret = zsock_connect(*sock, (struct sockaddr*)addr, addr_len);
 	if (ret < 0) {
 		printk("Cannot connect to %s remote (%d)", "IPv4", -errno);
 		zsock_close(*sock);
@@ -186,7 +189,8 @@ static void dns_result_cb(enum dns_resolve_status status,
 	}
 
 	memcpy(&dns_info, info, sizeof(struct dns_addrinfo));
-	printk("%s %s address: %s",
+	printk("[%s] %s %s address: %s",
+	       __func__,
 	       user_data ? (char*)user_data : "<null>",
 	       hr_family,
 	       net_addr_ntop(info->ai_family, addr, hr_addr, sizeof(hr_addr)));
