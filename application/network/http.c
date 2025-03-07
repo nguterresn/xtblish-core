@@ -23,9 +23,14 @@ static void http_response_cb(struct http_response* rsp,
                              enum http_final_call final_data, void* user_data);
 
 static struct dns_addrinfo dns_info = { 0 };
+static struct sockaddr_in  ota_addr = { .sin_addr = {
+	                                        .s4_addr = { 192, 168, 0, 140 } } };
 
 static struct k_sem dns_sem;
 static struct k_sem http_sem;
+
+static int http_get_from_ip(struct sockaddr_in* addr, const char* query);
+static int http_get_from_address(const char* hostname, const char* query);
 
 int http_init()
 {
@@ -45,14 +50,55 @@ void http_thread(void* arg1, void* arg2, void* arg3)
 		k_sleep(K_SECONDS(10));
 
 		printk("Attempt to perform a HTTP GET request.\n");
-		http_get("www.example.com", "/");
+		// http_get_from_ip(&ota_addr, "/");
+		http_get_from_address(EXAMPLE_hostname, "/");
 	}
 }
 
-int http_get(const char* hostname, const char* query)
+static int http_get_from_ip(struct sockaddr_in* addr, const char* query)
 {
-	struct sockaddr_in  addr4 = { 0 };
-	struct http_request req   = { 0 };
+	struct http_request req = { 0 };
+	static uint8_t      recv_buf[512];
+	static int          socket = -1;
+	int                 error;
+
+	req.method       = HTTP_GET;
+	req.url          = query;
+	req.host         = "localhost";
+	req.protocol     = "HTTP/1.1";
+	req.response     = http_response_cb;
+	req.recv_buf     = recv_buf;
+	req.recv_buf_len = sizeof(recv_buf);
+
+	error = connect_tcp_socket(AF_INET,
+	                           (struct sockaddr_in*)addr,
+	                           HTTP_PORT,
+	                           &socket,
+	                           sizeof(struct sockaddr_in));
+	if (error < 0) {
+		return error;
+	}
+
+	error = http_client_req(socket, &req, 2000, NULL);
+	if (error < 0) {
+		printk("Failed to perform an HTTP request! error %d\n", error);
+		goto close_socket;
+	}
+
+	if (k_sem_take(&http_sem, K_SECONDS(1)) < 0) {
+		error = -ENOLCK;
+		printk("Failed to get a HTTP response!\n");
+		goto close_socket;
+	}
+
+close_socket:
+	zsock_close(socket);
+	return error;
+}
+
+static int http_get_from_address(const char* hostname, const char* query)
+{
+	struct http_request req = { 0 };
 	static uint8_t      recv_buf[512];
 	static int          socket = -1;
 	int                 error;
@@ -80,14 +126,14 @@ int http_get(const char* hostname, const char* query)
 	                           (struct sockaddr_in*)&dns_info.ai_addr,
 	                           HTTP_PORT,
 	                           &socket,
-	                           sizeof(addr4));
+	                           sizeof(struct sockaddr_in));
 	if (error < 0) {
 		return error;
 	}
 
-	error = http_client_req(socket, &req, 3000, NULL);
+	error = http_client_req(socket, &req, 2000, NULL);
 	if (error < 0) {
-		printk("Failed to perform an HTTP request!\n");
+		printk("Failed to perform an HTTP request! error %d\n", error);
 		goto close_socket;
 	}
 
@@ -151,48 +197,19 @@ static int dns_resolve_ipv4(const char* hostname)
 static void dns_result_cb(enum dns_resolve_status status,
                           struct dns_addrinfo* info, void* user_data)
 {
-	char  hr_addr[NET_IPV6_ADDR_LEN];
-	char* hr_family;
+	char  hr_addr[NET_IPV4_ADDR_LEN];
 	void* addr;
 
-	switch (status) {
-	case DNS_EAI_CANCELED:
-		printk("DNS query was canceled\n");
-		return;
-	case DNS_EAI_FAIL:
-		printk("DNS resolve failed\n");
-		return;
-	case DNS_EAI_NODATA:
-		printk("Cannot resolve address\n");
-		return;
-	case DNS_EAI_ALLDONE:
-		printk("DNS resolving finished\n");
-		return;
-	case DNS_EAI_INPROGRESS:
-		break;
-	default:
-		printk("DNS resolving error (%d)\n", status);
-		return;
-	}
+	printk("DNS status %d\n", status);
 
-	if (!info) {
-		return;
-	}
-
-	if (info->ai_family == AF_INET) {
-		hr_family = "IPv4";
-		addr      = &net_sin(&info->ai_addr)->sin_addr;
-	}
-	else {
-		printk("Invalid IP address family %d", info->ai_family);
+	if (status != DNS_EAI_INPROGRESS || !info || info->ai_family != AF_INET) {
 		return;
 	}
 
 	memcpy(&dns_info, info, sizeof(struct dns_addrinfo));
-	printk("[%s] %s %s address: %s",
+	printk("[%s] %s address: %s",
 	       __func__,
 	       user_data ? (char*)user_data : "<null>",
-	       hr_family,
 	       net_addr_ntop(info->ai_family, addr, hr_addr, sizeof(hr_addr)));
 
 	k_sem_give(&dns_sem);
