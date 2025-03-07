@@ -97,12 +97,13 @@ static int http_get_from_ip(struct sockaddr_in* addr, const char* query)
 		return error;
 	}
 
-	error = http_client_req(socket, &req, 5000, NULL);
+	error = http_client_req(socket, &req, 3000, NULL);
 	if (error < 0) {
 		printk("Failed to perform an HTTP request! error %d\n", error);
 		goto close_socket;
 	}
 
+	// Note: The following semaphore might be redundant... Check this out later on.
 	if (k_sem_take(&http_sem, K_SECONDS(1)) < 0) {
 		error = -ENOLCK;
 		printk("Failed to get a HTTP response!\n");
