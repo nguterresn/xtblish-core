@@ -71,10 +71,6 @@ def run_server(port, file_path: str):
         port (int): Port to run the server on
         file_path (str): Path to the binary file to serve
     """
-    # Ensure the file exists
-    # if not os.path.exists(file_path):
-    #     print(f"Error: File not found: {file_path}")
-    #     return
 
     # Create handler with the binary file
     handler = lambda *args, **kwargs: BinaryFileHandler(
