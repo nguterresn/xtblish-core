@@ -15,23 +15,28 @@ class BinaryFileHandler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/status":
             self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.end_headers()
 
             file_exists = os.path.exists(self.binary_file)
             status_info = {
                 "file_exists": file_exists,
-                "file_path": self.binary_file,
                 "file_name": (
-                    os.path.basename(self.binary_file) if file_exists else None
+                    os.path.basename(self.binary_file) if file_exists else ""
                 ),
                 "file_size": os.path.getsize(self.binary_file) if file_exists else 0,
             }
+            encoded_json = json.dumps(status_info).encode()
 
-            self.wfile.write(json.dumps(status_info).encode())
-            print(
-                f"Status request: File {'exists' if file_exists else 'does not exist'}"
-            )
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(encoded_json)))
+            self.end_headers()
+
+            try:
+                self.wfile.write(encoded_json)
+                self.wfile.flush()
+                print(f"Len: {len(encoded_json)} | Response data: {status_info}")
+            except (ConnectionError, BrokenPipeError) as e:
+                print(f"Connection error during status request: {e}")
+
             return
         # If path is root or the specific file endpoint, serve our binary file
         if self.path == "/download":
