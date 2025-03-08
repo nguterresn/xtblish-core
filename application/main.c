@@ -43,8 +43,8 @@ int main(void)
 
 	__ASSERT(wifi_connect() == 0, "WiFi has failed to start a connection\n");
 
-	N_THREAD(_wifi_thread, wifi_stack, wifi_thread);
-	k_thread_name_set(&_wifi_thread, "wifi_thread");
+	// N_THREAD(_wifi_thread, wifi_stack, wifi_thread);
+	// k_thread_name_set(&_wifi_thread, "wifi_thread");
 
 	N_THREAD(_http_thread, http_stack, http_thread);
 	k_thread_name_set(&_http_thread, "thread_thread");

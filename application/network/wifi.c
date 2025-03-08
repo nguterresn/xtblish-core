@@ -14,7 +14,7 @@
 #endif
 
 extern struct sys_heap _system_heap;
-struct k_sem           net_sem;
+struct k_sem           new_ip;
 
 static struct net_mgmt_event_callback event_wifi = { 0 };
 static struct net_mgmt_event_callback event_net  = { 0 };
@@ -27,14 +27,14 @@ static void mgmt_event_net_handler(struct net_mgmt_event_callback* event_wifi,
 static void mgmt_event_wifi_handler(struct net_mgmt_event_callback* event_wifi,
                                     uint32_t mgmt_event, struct net_if* iface);
 
-void wifi_thread(void* arg1, void* arg2, void* arg3)
-{
-	printk("Start 'wifi_thread'\n");
+// void wifi_thread(void* arg1, void* arg2, void* arg3)
+// {
+// 	printk("Start 'wifi_thread'\n");
 
-	for (;;) {
-		k_sleep(K_SECONDS(1));
-	}
-}
+// 	for (;;) {
+// 		k_sleep(K_SECONDS(1));
+// 	}
+// }
 
 int wifi_connect(void)
 {
@@ -73,31 +73,15 @@ static void mgmt_event_net_handler(struct net_mgmt_event_callback* event_wifi,
 
 	switch (mgmt_event) {
 	case NET_EVENT_IF_UP:
-		printk("NET_EVENT_IF_UP\n");
-		break;
-
 	case NET_EVENT_IF_DOWN:
-		printk("NET_EVENT_IF_DOWN\n");
-		break;
-
 	case NET_EVENT_L4_CONNECTED:
-		printk("NET_EVENT_L4_CONNECTED\n");
-		break;
-
 	case NET_EVENT_L4_DISCONNECTED:
-		printk("NET_EVENT_L4_DISCONNECTED\n");
-		break;
-
 	case NET_EVENT_DNS_SERVER_ADD:
-		printk("New DNS server added!\n");
+	case NET_EVENT_IPV4_ADDR_DEL:
 		break;
 
 	case NET_EVENT_IPV4_ADDR_ADD:
-		printk("NET_EVENT_IPV4_ADDR_ADD\n");
-		break;
-
-	case NET_EVENT_IPV4_ADDR_DEL:
-		printk("NET_EVENT_IPV4_ADDR_DEL\n");
+		k_sem_give(&new_ip);
 		break;
 
 	default:
@@ -128,19 +112,15 @@ static void mgmt_event_wifi_handler(struct net_mgmt_event_callback* event_wifi,
 
 int wifi_init()
 {
-	int error = k_sem_init(&net_sem, 0, 1);
+	int error = k_sem_init(&new_ip, 0, 1);
 	if (error) {
 		return error;
 	}
 
 	net_mgmt_init_event_callback(&event_net,
 	                             mgmt_event_net_handler,
-	                             NET_EVENT_IF_DOWN | NET_EVENT_IF_UP |
-	                                 NET_EVENT_IPV4_ADDR_ADD |
-	                                 NET_EVENT_IPV4_ADDR_DEL |
-	                                 NET_EVENT_DNS_SERVER_ADD |
-	                                 NET_EVENT_L4_CONNECTED |
-	                                 NET_EVENT_L4_DISCONNECTED);
+	                             NET_EVENT_IPV4_ADDR_ADD |
+	                                 NET_EVENT_IPV4_ADDR_DEL);
 
 	net_mgmt_init_event_callback(&event_wifi,
 	                             mgmt_event_wifi_handler,

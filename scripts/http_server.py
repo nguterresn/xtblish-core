@@ -90,7 +90,7 @@ def run_server(port, file_path: str):
         print(f"Server started at http://localhost:{port}")
         print(f"Check the server status at http://localhost:{port}/status")
         if len(file_path):
-            print(f"Serving file: {file_name} ({file_size} bytes)")
+            print(f"\nServing file: {file_name} ({file_size} bytes)")
             print(f"File available at: http://localhost:{port}/download")
 
         print(f"\n\nPress Ctrl+C to stop the server")

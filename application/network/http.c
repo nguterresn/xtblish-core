@@ -1,15 +1,32 @@
 #include "http.h"
 #include <errno.h>
+#include <string.h>
 #include <sys/_stdint.h>
 #include <sys/errno.h>
 #include <zephyr/kernel.h>
 #include <zephyr/net/dns_resolve.h>
+#include <zephyr/net/hostname.h>
 #include <zephyr/net/net_ip.h>
 #include <zephyr/net/socket.h>
 #include <zephyr/net/http/client.h>
 #include <zephyr/posix/arpa/inet.h>
+#include <zephyr/sys/__assert.h>
 #include <zephyr/sys/printk.h>
 #include <zephyr/data/json.h>
+
+#define HTTP_PORT        8080
+#define EXAMPLE_hostname "http://example.com"
+#define DNS_TIMEOUT      (3 * MSEC_PER_SEC)
+
+static int connect_tcp_socket(struct sockaddr_in* addr, int port, int* sock);
+
+static int  dns_resolve_ipv4(const char* hostname);
+static void dns_result_cb(enum dns_resolve_status status,
+                          struct dns_addrinfo* info, void* user_data);
+static void http_response_cb(struct http_response* rsp,
+                             enum http_final_call final_data, void* user_data);
+static int  http_get_from_ip(struct sockaddr_in* addr, const char* query);
+static int  http_get_from_address(const char* hostname, const char* query);
 
 struct http_status_response {
 	bool     file_exists;
@@ -26,28 +43,15 @@ static const struct json_obj_descr http_status_response_descrp[] = {
 	                    JSON_TOK_NUMBER),
 };
 
-#define HTTP_PORT        8080
-#define EXAMPLE_hostname "http://example.com"
-#define DNS_TIMEOUT      (3 * MSEC_PER_SEC)
-
-static int connect_tcp_socket(sa_family_t family, struct sockaddr_in* addr,
-                              int port, int* sock, socklen_t addr_len);
-
-static int  dns_resolve_ipv4(const char* hostname);
-static void dns_result_cb(enum dns_resolve_status status,
-                          struct dns_addrinfo* info, void* user_data);
-static void http_response_cb(struct http_response* rsp,
-                             enum http_final_call final_data, void* user_data);
-
-static struct dns_addrinfo dns_info = { 0 };
-static struct sockaddr_in  ota_addr = { .sin_addr = {
-	                                        .s4_addr = { 192, 168, 0, 140 } } };
+static uint8_t             recv_buf[512] = { 0 };
+static struct dns_addrinfo dns_info      = { 0 };
+static struct sockaddr_in  ota_addr      = { .sin_addr = {
+	                                             .s4_addr = { 192, 168, 0, 140 } } };
 
 static struct k_sem dns_sem;
 static struct k_sem http_sem;
 
-static int http_get_from_ip(struct sockaddr_in* addr, const char* query);
-static int http_get_from_address(const char* hostname, const char* query);
+extern struct k_sem new_ip;
 
 int http_init()
 {
@@ -63,20 +67,21 @@ void http_thread(void* arg1, void* arg2, void* arg3)
 {
 	printk("Start 'http_thread'\n");
 
-	for (;;) {
-		k_sleep(K_SECONDS(10));
+	if (k_sem_take(&new_ip, K_SECONDS(20)) < 0) {
+		__ASSERT(0, "Failed to a new IP Address!\n");
+	}
 
-		printk("\n\nAttempt to perform a HTTP GET request.\n\n");
+	for (;;) {
+		printk("\n\nPeriodically (30s) check for status...\n\n");
 		http_get_from_ip(&ota_addr, "/status");
 
-		k_sleep(K_SECONDS(1000));
+		k_sleep(K_SECONDS(30));
 	}
 }
 
 static int http_get_from_ip(struct sockaddr_in* addr, const char* query)
 {
-	struct http_request req = { 0 };
-	static uint8_t      recv_buf[512];
+	struct http_request req    = { 0 };
 	static int          socket = -1;
 	int                 error;
 
@@ -88,11 +93,7 @@ static int http_get_from_ip(struct sockaddr_in* addr, const char* query)
 	req.recv_buf     = recv_buf;
 	req.recv_buf_len = sizeof(recv_buf);
 
-	error = connect_tcp_socket(AF_INET,
-	                           (struct sockaddr_in*)addr,
-	                           HTTP_PORT,
-	                           &socket,
-	                           sizeof(struct sockaddr_in));
+	error = connect_tcp_socket((struct sockaddr_in*)addr, HTTP_PORT, &socket);
 	if (error < 0) {
 		return error;
 	}
@@ -115,37 +116,43 @@ close_socket:
 	return error;
 }
 
+static int http_init_request(struct http_request* req, enum http_method method,
+                             const char* hostname, const char* query,
+                             http_response_cb_t response_cb)
+{
+	req->method       = method;
+	req->host         = hostname;
+	req->url          = query;
+	req->protocol     = "HTTP/1.1";
+	req->response     = response_cb;
+	req->recv_buf     = recv_buf;
+	req->recv_buf_len = sizeof(recv_buf);
+
+	memset(recv_buf, 0, sizeof(recv_buf));
+}
+
 static int http_get_from_address(const char* hostname, const char* query)
 {
-	struct http_request req = { 0 };
-	static uint8_t      recv_buf[512];
+	struct http_request req    = { 0 };
 	static int          socket = -1;
 	int                 error;
 
-	req.method       = HTTP_GET;
-	req.url          = query;
-	req.host         = hostname;
-	req.protocol     = "HTTP/1.1";
-	req.response     = http_response_cb;
-	req.recv_buf     = recv_buf;
-	req.recv_buf_len = sizeof(recv_buf);
+	http_init_request(&req, HTTP_GET, hostname, query, http_response_cb);
 
 	error = dns_resolve_ipv4(hostname);
 	if (error) {
 		return error;
 	}
 
-	error = k_sem_take(&dns_sem, K_SECONDS(5));
+	error = k_sem_take(&dns_sem, K_MSEC(1000));
 	if (error < 0) {
 		printk("Failed to resolve DNS [%d]!\n", error);
 		return -ENOLCK;
 	}
 
-	error = connect_tcp_socket(AF_INET,
-	                           (struct sockaddr_in*)&dns_info.ai_addr,
+	error = connect_tcp_socket((struct sockaddr_in*)&dns_info.ai_addr,
 	                           HTTP_PORT,
-	                           &socket,
-	                           sizeof(struct sockaddr_in));
+	                           &socket);
 	if (error < 0) {
 		return error;
 	}
@@ -167,19 +174,10 @@ close_socket:
 	return error;
 }
 
-static int connect_tcp_socket(sa_family_t family, struct sockaddr_in* addr,
-                              int port, int* sock, socklen_t addr_len)
+static int connect_tcp_socket(struct sockaddr_in* addr, int port, int* sock)
 {
 	addr->sin_family = AF_INET;
 	addr->sin_port   = htons(port);
-
-	// printk("\n\nADDR [%03d:%03d:%03d:%03d] PORT %d FAMILY %d\n\n",
-	//        addr->sin_addr.s4_addr[0],
-	//        addr->sin_addr.s4_addr[1],
-	//        addr->sin_addr.s4_addr[2],
-	//        addr->sin_addr.s4_addr[3],
-	//        addr->sin_port,
-	//        addr->sin_family);
 
 	*sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 	if (*sock < 0) {
@@ -187,7 +185,9 @@ static int connect_tcp_socket(sa_family_t family, struct sockaddr_in* addr,
 		return -errno;
 	}
 
-	int ret = zsock_connect(*sock, (struct sockaddr*)addr, addr_len);
+	int ret = zsock_connect(*sock,
+	                        (struct sockaddr*)addr,
+	                        sizeof(struct sockaddr_in));
 	if (ret < 0) {
 		printk("Cannot connect to %s remote (%d)", "IPv4", -errno);
 		zsock_close(*sock);
