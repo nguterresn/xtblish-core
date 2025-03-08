@@ -44,5 +44,5 @@ int main(void)
 	k_thread_name_set(&_app_thread, "app_thread");
 
 	N_THREAD(_http_thread, http_stack, http_thread);
-	k_thread_name_set(&_http_thread, "thread_thread");
+	k_thread_name_set(&_http_thread, "http_thread");
 }
