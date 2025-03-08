@@ -82,6 +82,7 @@ static void mgmt_event_net_handler(struct net_mgmt_event_callback* event_wifi,
 
 	case NET_EVENT_IPV4_ADDR_ADD:
 		k_sem_give(&new_ip);
+		k_sem_give(&new_ip);
 		break;
 
 	default:
@@ -112,7 +113,7 @@ static void mgmt_event_wifi_handler(struct net_mgmt_event_callback* event_wifi,
 
 int wifi_init()
 {
-	int error = k_sem_init(&new_ip, 0, 1);
+	int error = k_sem_init(&new_ip, 0, 2);
 	if (error) {
 		return error;
 	}

@@ -1,4 +1,5 @@
 #include "http.h"
+#include "dns.h"
 #include <errno.h>
 #include <string.h>
 #include <sys/_stdint.h>
@@ -20,9 +21,6 @@
 
 static int connect_tcp_socket(struct sockaddr_in* addr, int port, int* sock);
 
-static int  dns_resolve_ipv4(const char* hostname);
-static void dns_result_cb(enum dns_resolve_status status,
-                          struct dns_addrinfo* info, void* user_data);
 static void http_response_cb(struct http_response* rsp,
                              enum http_final_call final_data, void* user_data);
 static int  http_get_from_ip(struct sockaddr_in* addr, const char* query);
@@ -43,19 +41,18 @@ static const struct json_obj_descr http_status_response_descrp[] = {
 	                    JSON_TOK_NUMBER),
 };
 
-static uint8_t             recv_buf[512] = { 0 };
-static struct dns_addrinfo dns_info      = { 0 };
-static struct sockaddr_in  ota_addr      = { .sin_addr = {
-	                                             .s4_addr = { 192, 168, 0, 140 } } };
+static uint8_t            recv_buf[512] = { 0 };
+static struct sockaddr_in ota_addr      = { .sin_addr = {
+	                                            .s4_addr = { 192, 168, 0, 140 } } };
 
-static struct k_sem dns_sem;
-static struct k_sem http_sem;
+static struct k_sem   http_sem;
+static struct dns_ctx dns_ctx = { 0 };
 
 extern struct k_sem new_ip;
 
 int http_init()
 {
-	int error = k_sem_init(&dns_sem, 0, 1);
+	int error = dns_init(&dns_ctx);
 	if (error) {
 		return error;
 	}
@@ -79,19 +76,28 @@ void http_thread(void* arg1, void* arg2, void* arg3)
 	}
 }
 
+static void http_init_request(struct http_request* req, enum http_method method,
+                              const char* hostname, const char* query,
+                              http_response_cb_t response_cb)
+{
+	req->method       = method;
+	req->host         = hostname;
+	req->url          = query;
+	req->protocol     = "HTTP/1.1";
+	req->response     = response_cb;
+	req->recv_buf     = recv_buf;
+	req->recv_buf_len = sizeof(recv_buf);
+
+	memset(recv_buf, 0, sizeof(recv_buf));
+}
+
 static int http_get_from_ip(struct sockaddr_in* addr, const char* query)
 {
 	struct http_request req    = { 0 };
 	static int          socket = -1;
 	int                 error;
 
-	req.method       = HTTP_GET;
-	req.url          = query;
-	req.host         = "192.168.0.140";
-	req.protocol     = "HTTP/1.1";
-	req.response     = http_response_cb;
-	req.recv_buf     = recv_buf;
-	req.recv_buf_len = sizeof(recv_buf);
+	http_init_request(&req, HTTP_GET, "192.168.0.140", query, http_response_cb);
 
 	error = connect_tcp_socket((struct sockaddr_in*)addr, HTTP_PORT, &socket);
 	if (error < 0) {
@@ -116,21 +122,6 @@ close_socket:
 	return error;
 }
 
-static int http_init_request(struct http_request* req, enum http_method method,
-                             const char* hostname, const char* query,
-                             http_response_cb_t response_cb)
-{
-	req->method       = method;
-	req->host         = hostname;
-	req->url          = query;
-	req->protocol     = "HTTP/1.1";
-	req->response     = response_cb;
-	req->recv_buf     = recv_buf;
-	req->recv_buf_len = sizeof(recv_buf);
-
-	memset(recv_buf, 0, sizeof(recv_buf));
-}
-
 static int http_get_from_address(const char* hostname, const char* query)
 {
 	struct http_request req    = { 0 };
@@ -139,18 +130,13 @@ static int http_get_from_address(const char* hostname, const char* query)
 
 	http_init_request(&req, HTTP_GET, hostname, query, http_response_cb);
 
-	error = dns_resolve_ipv4(hostname);
+	error = dns_resolve_ipv4(hostname, &dns_ctx);
 	if (error) {
+		printk("Failed to resolve DNS %d\n", error);
 		return error;
 	}
 
-	error = k_sem_take(&dns_sem, K_MSEC(1000));
-	if (error < 0) {
-		printk("Failed to resolve DNS [%d]!\n", error);
-		return -ENOLCK;
-	}
-
-	error = connect_tcp_socket((struct sockaddr_in*)&dns_info.ai_addr,
+	error = connect_tcp_socket((struct sockaddr_in*)&dns_ctx.info.ai_addr,
 	                           HTTP_PORT,
 	                           &socket);
 	if (error < 0) {
@@ -163,7 +149,7 @@ static int http_get_from_address(const char* hostname, const char* query)
 		goto close_socket;
 	}
 
-	if (k_sem_take(&http_sem, K_SECONDS(1)) < 0) {
+	if (k_sem_take(&http_sem, K_MSEC(1000)) < 0) {
 		error = -ENOLCK;
 		printk("Failed to get a HTTP response!\n");
 		goto close_socket;
@@ -198,45 +184,11 @@ static int connect_tcp_socket(struct sockaddr_in* addr, int port, int* sock)
 	return 0;
 }
 
-static int dns_resolve_ipv4(const char* hostname)
-{
-	static uint16_t dns_id = 0;
-
-	int ret = dns_get_addr_info(hostname,
-	                            DNS_QUERY_TYPE_A,
-	                            &dns_id,
-	                            dns_result_cb,
-	                            (void*)hostname,
-	                            DNS_TIMEOUT);
-	ret < 0 ? printk("Cannot resolve IPv4 address (%d)\n", ret)
-	        : printk("DNS id %u\n", dns_id);
-	return ret;
-}
-
-static void dns_result_cb(enum dns_resolve_status status,
-                          struct dns_addrinfo* info, void* user_data)
-{
-	char  hr_addr[NET_IPV4_ADDR_LEN];
-	void* addr;
-
-	printk("DNS status %d\n", status);
-
-	if (status != DNS_EAI_INPROGRESS || !info || info->ai_family != AF_INET) {
-		return;
-	}
-
-	memcpy(&dns_info, info, sizeof(struct dns_addrinfo));
-	printk("[%s] %s address: %s",
-	       __func__,
-	       user_data ? (char*)user_data : "<null>",
-	       net_addr_ntop(info->ai_family, addr, hr_addr, sizeof(hr_addr)));
-
-	k_sem_give(&dns_sem);
-}
-
 static void http_response_cb(struct http_response* rsp,
                              enum http_final_call final_data, void* user_data)
 {
+	k_sem_give(&http_sem);
+
 	if (final_data == HTTP_DATA_MORE) {
 		printk("** HTTP_DATA_MORE ** (%u bytes)\n\n", (uint32_t)rsp->data_len);
 	}
@@ -265,6 +217,4 @@ static void http_response_cb(struct http_response* rsp,
 			       status.file_size);
 		}
 	}
-
-	k_sem_give(&http_sem);
 }

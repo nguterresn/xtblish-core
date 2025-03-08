@@ -7,16 +7,20 @@
 #include <stdio.h>
 #include "bindings.h"
 
-static NativeSymbol native_symbols[] = { {
-	                                         "console.log",  // the name of WASM function name
-	                                         bd_console_log, // the native function pointer
-	                                         "($)"           // the function prototype signature
-	                                     },
-	                                     {
-	                                         "abort",  // the name of WASM function name
-	                                         bd_abort, // the native function pointer
-	                                         "($$ii)"  // the function prototype signature
-	                                     } };
+#define WASM_FILE_MAX_WORD_SIZE 6144 // In WORDS!
+
+static NativeSymbol native_symbols[] = {
+	{
+	    "console.log",  // the name of WASM function name
+	    bd_console_log, // the native function pointer
+	    "($)"           // the function prototype signature
+	},
+	{
+	    "abort",  // the name of WASM function name
+	    bd_abort, // the native function pointer
+	    "($$ii)"  // the function prototype signature
+	}
+};
 
 static RuntimeInitArgs runtime_args = {
   .mem_alloc_type = Alloc_With_Allocator,
@@ -32,7 +36,7 @@ static RuntimeInitArgs runtime_args = {
 };
 
 // Storage partition has size of 0x6000, thus 6144 words.
-static uint32_t wasm_file[6144] = { 0 };
+static uint32_t wasm_file[WASM_FILE_MAX_WORD_SIZE] = { 0 };
 
 struct wasm_file {
 	uint32_t size;
@@ -75,7 +79,8 @@ int wasm_boot_app(void)
 
 	if (!wasm_runtime_register_natives("env",
 	                                   native_symbols,
-	                                   sizeof(native_symbols) / sizeof(NativeSymbol))) {
+	                                   sizeof(native_symbols) /
+	                                       sizeof(NativeSymbol))) {
 		printk("Failed to export native symbols!");
 		return -EPERM;
 	}
@@ -91,11 +96,12 @@ int wasm_boot_app(void)
 	}
 
 	/* create an instance of the WASM module (WASM linear memory is ready) */
-	wasm_module_inst_t module_inst = wasm_runtime_instantiate(module,
-	                                                          0, // May be ignored.
-	                                                          heap_size,
-	                                                          error_buf,
-	                                                          sizeof(error_buf));
+	wasm_module_inst_t
+	    module_inst = wasm_runtime_instantiate(module,
+	                                           0, // May be ignored.
+	                                           heap_size,
+	                                           error_buf,
+	                                           sizeof(error_buf));
 	if (module_inst == NULL) {
 		printk("Failed to instantiate! Error: %s\n", error_buf);
 		return -EPERM;
@@ -103,13 +109,15 @@ int wasm_boot_app(void)
 
 	// The stack size is the amount of memory necessary to store
 	// the WASM binary operations, like i32.add 1 or i32.const 1
-	wasm_exec_env_t exec_env = wasm_runtime_create_exec_env(module_inst, stack_size);
+	wasm_exec_env_t exec_env = wasm_runtime_create_exec_env(module_inst,
+	                                                        stack_size);
 	if (exec_env == NULL) {
 		printk("Failed to create the environment!\n");
 		return -EPERM;
 	}
 
-	wasm_function_inst_t func = wasm_runtime_lookup_function(module_inst, "hello_world");
+	wasm_function_inst_t func = wasm_runtime_lookup_function(module_inst,
+	                                                         "hello_world");
 	if (func == NULL) {
 		printk("Failed to look up for 'hello_world'\n");
 		return -EPERM;
