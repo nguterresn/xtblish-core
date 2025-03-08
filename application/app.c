@@ -4,15 +4,13 @@
 #include <zephyr/kernel.h>
 #include <zephyr/data/json.h>
 
-static void app_http_status_callback(struct http_request*  req,
-                                     struct http_response* res,
+extern struct k_sem new_ip;
+
+static void app_http_status_callback(struct http_response* res,
                                      enum http_final_call  final_data);
 
 extern struct sys_heap         _system_heap;
 static struct sys_memory_stats stats;
-static struct http_ctx         http_status_ctx = {
-	        .callback = app_http_status_callback
-};
 
 struct http_status_response {
 	bool     file_exists;
@@ -32,8 +30,6 @@ static const struct json_obj_descr http_status_response_descrp[] = {
 // (!) Important Note:
 // Due to the way the Wifi manages the heap, it should be correclty initialized
 // before any runtime is set. Wifi heap can not allocate memory in an external RAM.
-
-extern struct k_sem new_ip;
 
 struct k_sem new_wasm_app;
 
@@ -61,14 +57,13 @@ void app_thread(void* arg1, void* arg2, void* arg3)
 
 	for (;;) {
 		printk("\n\nPeriodically (30s) check for status...\n\n");
-		http_get_from_local_server(&http_status_ctx, "/status");
+		http_get_from_local_server("/status", app_http_status_callback);
 
 		k_sleep(K_SECONDS(30));
 	}
 }
 
-static void app_http_status_callback(struct http_request*  req,
-                                     struct http_response* res,
+static void app_http_status_callback(struct http_response* res,
                                      enum http_final_call  final_data)
 {
 	struct http_status_response status = { 0 };
