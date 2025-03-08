@@ -3,11 +3,14 @@
 #include "http.h"
 #include <zephyr/kernel.h>
 #include <zephyr/data/json.h>
+#include <zephyr/sys/printk.h>
 
 extern struct k_sem new_ip;
 
 static void app_http_status_callback(struct http_response* res,
                                      enum http_final_call  final_data);
+static void app_http_download_callback(struct http_response* res,
+                                       enum http_final_call  final_data);
 
 extern struct sys_heap         _system_heap;
 static struct sys_memory_stats stats;
@@ -31,11 +34,10 @@ static const struct json_obj_descr http_status_response_descrp[] = {
 // Due to the way the Wifi manages the heap, it should be correclty initialized
 // before any runtime is set. Wifi heap can not allocate memory in an external RAM.
 
-struct k_sem new_wasm_app;
+bool download_new_app = false;
 
 int app_init()
 {
-	return k_sem_init(&new_wasm_app, 0, 1);
 }
 
 void app_thread(void* arg1, void* arg2, void* arg3)
@@ -46,18 +48,25 @@ void app_thread(void* arg1, void* arg2, void* arg3)
 
 	printk("\n\n** START WASM_RUNTIME ! **\n");
 
-	__ASSERT(wasm_boot_app() == 0, "Failed to boot app\n");
+	__ASSERT(wasm_boot_app(false) == 0, "Failed to boot app\n");
 	sys_heap_runtime_stats_get(&_system_heap, &stats);
 
-	printk("\n\n");
-	printk("INFO: Allocated Heap = %zu\n", stats.allocated_bytes);
+	printk("\n\nINFO: Allocated Heap = %zu\n", stats.allocated_bytes);
 	printk("INFO: Free Heap = %zu\n", stats.free_bytes);
-	printk("INFO: Max Allocated Heap = %zu\n", stats.max_allocated_bytes);
-	printk("\n\n");
+	printk("INFO: Max Allocated Heap = %zu\n\n\n", stats.max_allocated_bytes);
+
+	/// ------ ///
+
+	int error = 0;
 
 	for (;;) {
 		printk("\n\nPeriodically (30s) check for status...\n\n");
-		http_get_from_local_server("/status", app_http_status_callback);
+		error = http_get_from_local_server("/status", app_http_status_callback);
+
+		if (!error && download_new_app) {
+			printk("Download File....\n");
+			http_get_from_local_server("/download", app_http_download_callback);
+		}
 
 		k_sleep(K_SECONDS(30));
 	}
@@ -85,6 +94,22 @@ static void app_http_status_callback(struct http_response* res,
 			       status.file_exists,
 			       status.file_name,
 			       status.file_size);
+			if (status.file_exists) {
+				download_new_app = true;
+			}
 		}
+	}
+}
+
+static void app_http_download_callback(struct http_response* res,
+                                       enum http_final_call  final_data)
+{
+	printk("Response code: %u\n", res->http_status_code);
+
+	if (200 <= res->http_status_code && res->http_status_code <= 299) {
+		// There's a file coming.
+		printk("Body length: %d\n", (int)res->body_frag_len);
+		// wasm_replace_app(res->body_frag_start, res->body_frag_len);
+		download_new_app = false;
 	}
 }
