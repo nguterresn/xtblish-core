@@ -63,7 +63,7 @@ void app_thread(void* arg1, void* arg2, void* arg3)
 		printk("\n\nPeriodically (30s) check for status...\n\n");
 		error = http_get_from_local_server("/status", app_http_status_callback);
 
-		if (!error && download_new_app) {
+		if (error >= 0 && download_new_app) {
 			printk("Download File....\n");
 			http_get_from_local_server("/download", app_http_download_callback);
 		}
@@ -95,6 +95,7 @@ static void app_http_status_callback(struct http_response* res,
 			       status.file_name,
 			       status.file_size);
 			if (status.file_exists) {
+				printk("File exists!\n");
 				download_new_app = true;
 			}
 		}

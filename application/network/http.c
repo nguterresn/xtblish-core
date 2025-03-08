@@ -60,7 +60,7 @@ static void http_init_request(struct http_request* req, enum http_method method,
  * @brief HTTP GET from local OTA Server address 192.168.0.140
  *
  * @param query e.g. '/status'
- * @return int
+ * @return int error if <0, 0>= success
  */
 int http_get_from_local_server(const char* query, http_res_handle_cb callback)
 {
