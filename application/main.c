@@ -18,10 +18,11 @@
 	                K_NO_WAIT)
 
 static K_THREAD_STACK_DEFINE(app_stack, 8192);
-static K_THREAD_STACK_DEFINE(http_stack, 8192);
+// static K_THREAD_STACK_DEFINE(http_stack, 8192);
 
 static struct k_thread _app_thread;
-static struct k_thread _http_thread;
+
+// static struct k_thread _http_thread;
 
 // Note: https://docs.zephyrproject.org/latest/kernel/services/threads/system_threads.html
 // Above is a brief about the main and the idle thread.
@@ -43,6 +44,6 @@ int main(void)
 	N_THREAD(_app_thread, app_stack, app_thread);
 	k_thread_name_set(&_app_thread, "app_thread");
 
-	N_THREAD(_http_thread, http_stack, http_thread);
-	k_thread_name_set(&_http_thread, "http_thread");
+	// N_THREAD(_http_thread, http_stack, http_thread);
+	// k_thread_name_set(&_http_thread, "http_thread");
 }
