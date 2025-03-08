@@ -24,7 +24,7 @@ void app_thread(void* arg1, void* arg2, void* arg3)
 
 	k_sem_take(&new_ip, K_FOREVER);
 
-	printk("** START WASM_RUNTIME ! **\n");
+	printk("\n\n** START WASM_RUNTIME ! **\n");
 
 	__ASSERT(wasm_boot_app() == 0, "Failed to boot app\n");
 	sys_heap_runtime_stats_get(&_system_heap, &stats);
@@ -36,8 +36,6 @@ void app_thread(void* arg1, void* arg2, void* arg3)
 	printk("\n\n");
 
 	for (;;) {
-		if (k_sem_take(&new_wasm_app, K_FOREVER)) {
-			
-		}
+		if (k_sem_take(&new_wasm_app, K_FOREVER)) {}
 	}
 }

@@ -1,5 +1,6 @@
 #include "http.h"
 #include "dns.h"
+#include "socket.h"
 #include <errno.h>
 #include <string.h>
 #include <sys/_stdint.h>
@@ -7,9 +8,8 @@
 #include <zephyr/kernel.h>
 #include <zephyr/net/dns_resolve.h>
 #include <zephyr/net/hostname.h>
-#include <zephyr/net/net_ip.h>
-#include <zephyr/net/socket.h>
 #include <zephyr/net/http/client.h>
+#include <zephyr/net/net_ip.h>
 #include <zephyr/posix/arpa/inet.h>
 #include <zephyr/sys/__assert.h>
 #include <zephyr/sys/printk.h>
@@ -18,8 +18,6 @@
 #define HTTP_PORT        8080
 #define EXAMPLE_hostname "http://example.com"
 #define DNS_TIMEOUT      (3 * MSEC_PER_SEC)
-
-static int connect_tcp_socket(struct sockaddr_in* addr, int port, int* sock);
 
 static void http_response_cb(struct http_response* rsp,
                              enum http_final_call final_data, void* user_data);
@@ -99,7 +97,11 @@ static int http_get_from_ip(struct sockaddr_in* addr, const char* query)
 
 	http_init_request(&req, HTTP_GET, "192.168.0.140", query, http_response_cb);
 
-	error = connect_tcp_socket((struct sockaddr_in*)addr, HTTP_PORT, &socket);
+	error = socket_connect(&socket,
+	                       SOCK_STREAM,
+	                       IPPROTO_TCP,
+	                       (struct sockaddr_in*)addr,
+	                       HTTP_PORT);
 	if (error < 0) {
 		return error;
 	}
@@ -136,9 +138,11 @@ static int http_get_from_address(const char* hostname, const char* query)
 		return error;
 	}
 
-	error = connect_tcp_socket((struct sockaddr_in*)&dns_ctx.info.ai_addr,
-	                           HTTP_PORT,
-	                           &socket);
+	error = socket_connect(&socket,
+	                       SOCK_STREAM,
+	                       IPPROTO_TCP,
+	                       (struct sockaddr_in*)&dns_ctx.info.ai_addr,
+	                       HTTP_PORT);
 	if (error < 0) {
 		return error;
 	}
@@ -158,30 +162,6 @@ static int http_get_from_address(const char* hostname, const char* query)
 close_socket:
 	zsock_close(socket);
 	return error;
-}
-
-static int connect_tcp_socket(struct sockaddr_in* addr, int port, int* sock)
-{
-	addr->sin_family = AF_INET;
-	addr->sin_port   = htons(port);
-
-	*sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-	if (*sock < 0) {
-		printk("Failed to create %s HTTP socket (%d)", "IPv4", -errno);
-		return -errno;
-	}
-
-	int ret = zsock_connect(*sock,
-	                        (struct sockaddr*)addr,
-	                        sizeof(struct sockaddr_in));
-	if (ret < 0) {
-		printk("Cannot connect to %s remote (%d)", "IPv4", -errno);
-		zsock_close(*sock);
-		*sock = -1;
-		return -errno;
-	}
-
-	return 0;
 }
 
 static void http_response_cb(struct http_response* rsp,
