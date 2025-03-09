@@ -8,8 +8,6 @@
 #include <stdio.h>
 #include "bindings.h"
 
-#define WASM_FILE_MAX_WORD_SIZE 6144 // In WORDS!
-
 struct wasm_file {
 	uint32_t size;
 	uint32_t prefix;
@@ -43,7 +41,7 @@ static RuntimeInitArgs runtime_args = {
 };
 
 // Storage partition has size of 0x6000, thus 6144 words.
-static uint32_t wasm_file[WASM_FILE_MAX_WORD_SIZE] = { 0 };
+uint8_t wasm_file[WASM_FILE_MAX_SIZE] = { 0 };
 
 static const uint32_t stack_size = 4096;
 static const uint32_t heap_size  = 0;
@@ -94,13 +92,20 @@ int wasm_boot_app(bool skip_runtime_init)
 
 	struct wasm_file* file = (struct wasm_file*)wasm_file;
 
+	printk("[WASM file] size: %u prefix: %u version: %u\n",
+	       file->size,
+	       file->prefix,
+	       file->version);
+
 	// /* parse the WASM file from buffer and create a WASM module */
 	module = wasm_runtime_load((uint8_t*)&file->prefix,
 	                           file->size,
 	                           error_buf,
 	                           sizeof(error_buf));
 	if (module == NULL) {
-		printk("Failed to load! Error: %s\n", error_buf);
+		printk("Failed to load! Error: '%s' File size: %u\n",
+		       error_buf,
+		       file->size);
 		return -EPERM;
 	}
 
@@ -152,7 +157,5 @@ int wasm_replace_app(uint8_t* src, uint32_t len)
 	wasm_runtime_deinstantiate(module_inst);
 	wasm_runtime_unload(module);
 
-	wasm_boot_app(true);
-
-	return 0;
+	return wasm_boot_app(true);
 }

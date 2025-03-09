@@ -3,16 +3,19 @@
 #include "http.h"
 #include <zephyr/kernel.h>
 #include <zephyr/data/json.h>
+#include <zephyr/net/http/client.h>
 #include <zephyr/sys/printk.h>
 
-extern struct k_sem new_ip;
+extern struct k_sem    new_ip;
+extern struct sys_heap _system_heap;
+extern uint8_t         wasm_file[WASM_FILE_MAX_SIZE];
+static uint32_t        wasm_file_index = 0;
 
 static void app_http_status_callback(struct http_response* res,
                                      enum http_final_call  final_data);
 static void app_http_download_callback(struct http_response* res,
                                        enum http_final_call  final_data);
 
-extern struct sys_heap         _system_heap;
 static struct sys_memory_stats stats;
 
 struct http_status_response {
@@ -65,7 +68,15 @@ void app_thread(void* arg1, void* arg2, void* arg3)
 
 		if (error >= 0 && download_new_app) {
 			printk("Download File....\n");
-			http_get_from_local_server("/download", app_http_download_callback);
+			memset(wasm_file, 0, WASM_FILE_MAX_SIZE);
+			error = http_get_from_local_server("/download",
+			                                   app_http_download_callback);
+			if (error >= 0) {
+				printk("\nReplacing app...\n");
+				error = wasm_replace_app(wasm_file, wasm_file_index);
+				printk("Done. Error: %d\n", error);
+				wasm_file_index = 0;
+			}
 		}
 
 		k_sleep(K_SECONDS(30));
@@ -108,9 +119,14 @@ static void app_http_download_callback(struct http_response* res,
 	printk("Response code: %u\n", res->http_status_code);
 
 	if (200 <= res->http_status_code && res->http_status_code <= 299) {
-		// There's a file coming.
-		printk("Body length: %d\n", (int)res->body_frag_len);
-		// wasm_replace_app(res->body_frag_start, res->body_frag_len);
-		download_new_app = false;
+		memcpy(wasm_file + wasm_file_index,
+		       res->body_frag_start,
+		       res->body_frag_len);
+		wasm_file_index += res->body_frag_len;
+
+		if (final_data == HTTP_DATA_FINAL) {
+			download_new_app = false;
+			printk("New file downloaded size: %u\n", wasm_file_index);
+		}
 	}
 }
