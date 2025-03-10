@@ -1,6 +1,8 @@
-node_modules
-.venv
-build
 .DS_Store
+.vscode
+.venv
 .cache
+
+node_modules
+build
 cred.h
