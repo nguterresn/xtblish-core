@@ -1,24 +1,5 @@
 CompileFlags:
   CompilationDatabase: build
-  Add:
-  [
-    -isystem/Users/nunonogueira/Projectos/zephyr-projects/zephyr/include,
-
-    # Zephyr files, modules, libs, etc
-    -I/Users/nunonogueira/Projectos/zephyr-projects/zephyr/include
-    -I/Users/nunonogueira/Projectos/zephyr-projects/zephyr/kernel/include,
-    -I/Users/nunonogueira/Projectos/zephyr-projects/zephyr/arch/arm/include,
-    -I/Users/nunonogueira/Projectos/zephyr-projects/zephyr/lib/fnmatch,
-    -I/Users/nunonogueira/Projectos/zephyr-projects/zephyr/modules/cmsis,
-    -I/Users/nunonogueira/Projectos/zephyr-projects/zephyr/subsys,
-    -I/Users/nunonogueira/Projectos/zephyr-projects/modules/hal/cmsis/CMSIS/Core/Include,
-    -I/Users/nunonogueira/Projectos/zephyr-projects/modules/debug/segger/rtt,
-    -I/Users/nunonogueira/Projectos/zephyr-projects/modules/crypto/tinycrypt/lib/include,
-    -I/Users/nunonogueira/Projectos/zephyr-projects/zephyr/subsys/bluetooth,
-
-    # Toolchain directory include
-    -isystem/Users/nunonogueira/zephyr-sdk-0.17.0/xtensa-espressif_esp32_zephyr-elf/xtensa-espressif_esp32_zephyr-elf/include,
-  ]
   Remove: [
     -fno-printf-return-value,
     -mfp16-format=*,
