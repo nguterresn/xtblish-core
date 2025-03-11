@@ -8,7 +8,7 @@
 
 extern struct k_sem    new_ip;
 extern struct sys_heap _system_heap;
-extern uint8_t         wasm_file[WASM_FILE_MAX_SIZE];
+extern uint8_t         wasm_file[WASM_FILE_MAX_SIZE * 4];
 static uint32_t        wasm_file_index = 0;
 
 static void app_http_status_callback(struct http_response* res,
@@ -68,12 +68,12 @@ void app_thread(void* arg1, void* arg2, void* arg3)
 
 		if (error >= 0 && download_new_app) {
 			printk("Download File....\n");
-			memset(wasm_file, 0, WASM_FILE_MAX_SIZE);
+			memset(wasm_file, 0, sizeof(wasm_file));
 			error = http_get_from_local_server("/download",
 			                                   app_http_download_callback);
 			if (error >= 0) {
-				printk("\nReplacing app...\n");
-				error = wasm_replace_app(wasm_file, wasm_file_index);
+				printk("\nReplacing app... with %d bytes\n", wasm_file_index);
+			error = wasm_replace_app(wasm_file, wasm_file_index);
 				printk("Done. Error: %d\n", error);
 				wasm_file_index = 0;
 			}
@@ -116,9 +116,12 @@ static void app_http_status_callback(struct http_response* res,
 static void app_http_download_callback(struct http_response* res,
                                        enum http_final_call  final_data)
 {
-	printk("Response code: %u\n", res->http_status_code);
+	printk("Response code: %u body len %d\n",
+	       res->http_status_code,
+	       (int)res->body_frag_len);
 
-	if (200 <= res->http_status_code && res->http_status_code <= 299) {
+	if (200 <= res->http_status_code && res->http_status_code <= 299 &&
+	    res->body_found) {
 		memcpy(wasm_file + wasm_file_index,
 		       res->body_frag_start,
 		       res->body_frag_len);

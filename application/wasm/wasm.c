@@ -41,7 +41,7 @@ static RuntimeInitArgs runtime_args = {
 };
 
 // Storage partition has size of 0x6000, thus 6144 words.
-uint8_t wasm_file[WASM_FILE_MAX_SIZE] = { 0 };
+__aligned(4) uint8_t wasm_file[WASM_FILE_MAX_SIZE * 4] = { 0 };
 
 static const uint32_t stack_size = 4096;
 static const uint32_t heap_size  = 0;
@@ -71,7 +71,6 @@ int wasm_boot_app(bool skip_runtime_init)
 			printk("Failed to export native symbols!");
 			return -EPERM;
 		}
-		// wasm_runtime_set_log_level(WASM_LOG_LEVEL_VERBOSE);
 
 		error = flash_area_open(FIXED_PARTITION_ID(storage_partition),
 		                        &wasm_area);
@@ -145,8 +144,15 @@ int wasm_boot_app(bool skip_runtime_init)
 
 int wasm_replace_app(uint8_t* src, uint32_t len)
 {
-	int error = flash_area_write(wasm_area, 0, src, len);
-	if (error) {
+	int error = 0;
+	error     = flash_area_erase(wasm_area, 0, len);
+	if (error || errno) {
+		printk("Failed to erase the flash! [%d:%d]\n", error, -errno);
+		return error;
+	}
+
+	error = flash_area_write(wasm_area, 0, (uint32_t*)src, len);
+	if (error || errno) {
 		printk("Failed to write new app onto the flash! [%d:%d]\n",
 		       error,
 		       -errno);
