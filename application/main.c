@@ -4,6 +4,7 @@
 #include "app.h"
 #include "network/wifi.h"
 #include "network/http.h"
+#include "network/mqtt.h"
 
 #define N_THREAD(thread, stack, func)             \
 	k_thread_create(&thread,                      \
@@ -37,6 +38,7 @@ int main(void)
 	__ASSERT(wifi_init() == 0, "WiFi has failed to initialized\n");
 	__ASSERT(app_init() == 0, "App has failed to initialized\n");
 	__ASSERT(http_init() == 0, "HTTP has failed to initialized\n");
+	__ASSERT(mqtt_init() == 0, "MQTT has failed to initialized\n");
 
 	__ASSERT(wifi_connect() == 0, "WiFi has failed to start a connection\n");
 
