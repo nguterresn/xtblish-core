@@ -13,7 +13,7 @@
   "license": "ISC",
   "description": "",
   "devDependencies": {
-    "assemblyscript": "^0.27.34"
+    "xtblish-client": "^1.0.13"
   },
   "type": "module",
   "exports": {
