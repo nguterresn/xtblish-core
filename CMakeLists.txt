@@ -30,13 +30,13 @@ include (${WAMR_ROOT_DIR}/build-scripts/runtime_lib.cmake)
 file(GLOB TS_FILES ${CMAKE_SOURCE_DIR}/application/assem/assembly/*.ts)
 set(WASM_OUTPUT ${CMAKE_SOURCE_DIR}/application/assem/build/debug.wasm)
 set(WASM_AS_INDEX ${CMAKE_SOURCE_DIR}/application/assem/assembly/index.ts)
-set(BINARY_OUTPUT ${CMAKE_SOURCE_DIR}/application/assem/build/debug-signed.bin)
+set(BINARY_OUTPUT ${CMAKE_SOURCE_DIR}/application/assem/build/signed-debug.bin)
 
 add_custom_target(rel-wasm ALL DEPENDS ${WASM_OUTPUT})
 add_custom_command(
-  OUTPUT ${WASM_OUTPUT}
+  OUTPUT ${WASM_OUTPUT} ${BINARY_OUTPUT}
   DEPENDS ${TS_FILES}
-  COMMENT "Compiling AssemblyScript to WASM."
+  COMMENT "Running xtblish-client: compile, sign and deploy WASM application"
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/application/assem
   COMMAND npx xtblish -s assembly/index.ts -u 124 -c xtblish.json --dev
 )

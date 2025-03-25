@@ -12,14 +12,14 @@
   "author": "",
   "license": "ISC",
   "description": "",
-  "devDependencies": {
-    "xtblish-client": "^1.0.13"
-  },
   "type": "module",
   "exports": {
     ".": {
       "import": "./build/release.js",
       "types": "./build/release.d.ts"
     }
+  },
+  "devDependencies": {
+    "xtblish-client": "^1.0.14"
   }
 }
