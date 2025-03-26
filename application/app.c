@@ -1,12 +1,12 @@
 #include "app.h"
 #include "wasm/wasm.h"
 #include "http.h"
+#include "mqtt.h"
 #include <zephyr/kernel.h>
 #include <zephyr/data/json.h>
 #include <zephyr/net/http/client.h>
 #include <zephyr/sys/printk.h>
 
-extern struct k_sem    new_ip;
 extern struct sys_heap _system_heap;
 extern uint8_t         wasm_file[WASM_FILE_MAX_SIZE * 4];
 static uint32_t        wasm_file_index = 0;
@@ -47,8 +47,6 @@ void app_thread(void* arg1, void* arg2, void* arg3)
 {
 	printk("Start 'app_thread'\n");
 
-	k_sem_take(&new_ip, K_FOREVER);
-
 	printk("\n\n** START WASM_RUNTIME ! **\n");
 
 	__ASSERT(wasm_boot_app(false) == 0, "Failed to boot app\n");
@@ -60,24 +58,22 @@ void app_thread(void* arg1, void* arg2, void* arg3)
 
 	/// ------ ///
 
-	int error = 0;
-
 	for (;;) {
-		printk("\n\nPeriodically (30s) check for status...\n\n");
-		error = http_get_from_local_server("/status", app_http_status_callback);
+		// printk("\n\nPeriodically (30s) check for status...\n\n");
+		// error = http_get_from_local_server("/status", app_http_status_callback);
 
-		if (error >= 0 && download_new_app) {
-			printk("Download File....\n");
-			memset(wasm_file, 0, sizeof(wasm_file));
-			error = http_get_from_local_server("/download",
-			                                   app_http_download_callback);
-			if (error >= 0) {
-				printk("\nReplacing app... with %d bytes\n", wasm_file_index);
-			error = wasm_replace_app(wasm_file, wasm_file_index);
-				printk("Done. Error: %d\n", error);
-				wasm_file_index = 0;
-			}
-		}
+		// if (error >= 0 && download_new_app) {
+		// 	printk("Download File....\n");
+		// 	memset(wasm_file, 0, sizeof(wasm_file));
+		// 	error = http_get_from_local_server("/download",
+		// 	                                   app_http_download_callback);
+		// 	if (error >= 0) {
+		// 		printk("\nReplacing app... with %d bytes\n", wasm_file_index);
+		// 	error = wasm_replace_app(wasm_file, wasm_file_index);
+		// 		printk("Done. Error: %d\n", error);
+		// 		wasm_file_index = 0;
+		// 	}
+		// }
 
 		k_sleep(K_SECONDS(30));
 	}

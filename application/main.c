@@ -19,10 +19,12 @@
 	                K_NO_WAIT)
 
 static K_THREAD_STACK_DEFINE(app_stack, 8192);
+static K_THREAD_STACK_DEFINE(mqtt_stack, 4096);
 
 static struct k_thread _app_thread;
+static struct k_thread _mqtt_thread;
 
-// static struct k_thread _http_thread;
+extern struct k_sem new_ip;
 
 // Note: https://docs.zephyrproject.org/latest/kernel/services/threads/system_threads.html
 // Above is a brief about the main and the idle thread.
@@ -42,6 +44,10 @@ int main(void)
 
 	__ASSERT(wifi_connect() == 0, "WiFi has failed to start a connection\n");
 
+	k_sem_take(&new_ip, K_FOREVER);
+
+	N_THREAD(_mqtt_thread, mqtt_stack, mqtt_thread);
+	k_thread_name_set(&_mqtt_thread, "mqtt_thread");
 	N_THREAD(_app_thread, app_stack, app_thread);
 	k_thread_name_set(&_app_thread, "app_thread");
 }

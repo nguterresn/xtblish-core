@@ -9,10 +9,12 @@
 #include "bindings.h"
 
 struct wasm_file {
+	uint8_t  hash[32];
+	uint8_t  data[512];
 	uint32_t size;
 	uint32_t prefix;
 	uint32_t version;
-};
+} __packed;
 
 static NativeSymbol native_symbols[] = {
 	{

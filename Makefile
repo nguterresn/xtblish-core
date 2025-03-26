@@ -22,7 +22,7 @@ rom_report:
 	west build -b esp32s3_devkitc/esp32s3/procpu -t rom_report > rom_report.txt
 
 flash: zephyr
-	/Users/nunonogueira/Projectos/zephyr-projects/wasm-zephyr-ota/.venv/bin/python3.13 /Users/nunonogueira/Projectos/zephyr-projects/modules/hal/espressif/tools/esptool_py/esptool.py -p /dev/cu.wchusbserial58FC0505471 --baud 921600 --before default_reset --after hard_reset write_flash -u --flash_mode dio --flash_freq 40m --flash_size detect 0x0 /Users/nunonogueira/Projectos/zephyr-projects/wasm-zephyr-ota/build/zephyr/zephyr.bin 0x250000 /Users/nunonogueira/Projectos/zephyr-projects/wasm-zephyr-ota/build/wasm.bin
+	/Users/nunonogueira/Projectos/zephyr-projects/wasm-zephyr-ota/.venv/bin/python3.13 /Users/nunonogueira/Projectos/zephyr-projects/modules/hal/espressif/tools/esptool_py/esptool.py -p /dev/cu.wchusbserial58FC0505471 --baud 921600 --before default_reset --after hard_reset write_flash -u --flash_mode dio --flash_freq 40m --flash_size detect 0x0 /Users/nunonogueira/Projectos/zephyr-projects/wasm-zephyr-ota/build/zephyr/zephyr.bin 0x250000 /Users/nunonogueira/Projectos/zephyr-projects/wasm-zephyr-ota/application/assem/build/signed-debug.bin
 	# /Users/nunonogueira/Projectos/zephyr-projects/wasm-zephyr-ota/.venv/bin/python3.13 /Users/nunonogueira/Projectos/zephyr-projects/modules/hal/espressif/tools/esptool_py/esptool.py -p  /dev/cu.usbmodem1101 --baud 921600 --before default_reset --after hard_reset write_flash -u --flash_mode dio --flash_freq 40m --flash_size detect 0x0 /Users/nunonogueira/Projectos/zephyr-projects/wasm-zephyr-ota/build/zephyr/zephyr.bin 0x250000 /Users/nunonogueira/Projectos/zephyr-projects/wasm-zephyr-ota/build/wasm.bin
 
 dump:

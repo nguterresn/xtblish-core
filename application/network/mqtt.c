@@ -1,4 +1,6 @@
 #include "mqtt.h"
+#include "zephyr/kernel.h"
+#include "zephyr/sys/printk.h"
 #include <stdint.h>
 #include <zephyr/net/mqtt.h>
 #include <zephyr/posix/arpa/inet.h>
@@ -7,24 +9,20 @@
 static uint8_t rx_buffer[256];
 static uint8_t tx_buffer[256];
 
-static bool connected;
+static bool          connected;
+static struct pollfd fds[1];
 
+// Only one client and only one broker!
 static struct mqtt_client      client_ctx;
 static struct sockaddr_storage broker;
 
-static struct pollfd fds[1];
-static int           nfds;
+static bool do_publish   = false;
+static bool do_subscribe = false;
 
-void mqtt_evt_handler(struct mqtt_client* client, const struct mqtt_evt* evt);
-
-static void broker_init(void)
-{
-	struct sockaddr_in* broker4 = (struct sockaddr_in*)&broker;
-
-	broker4->sin_family = AF_INET;
-	broker4->sin_port   = htons(1883);
-	inet_pton(AF_INET, "192.168.0.140", &broker4->sin_addr);
-}
+static void broker_init(void);
+static int  wait(int timeout);
+static void mqtt_evt_handler(struct mqtt_client*    client,
+                             const struct mqtt_evt* evt);
 
 int mqtt_init()
 {
@@ -50,66 +48,148 @@ int mqtt_init()
 	return 0;
 }
 
-static void prepare_fds(struct mqtt_client* client)
+int mqtt_sub(const char* topic_name, void (*cb)())
 {
-	if (client->transport.type == MQTT_TRANSPORT_NON_SECURE) {
-		fds[0].fd = client->transport.tcp.sock;
-	}
-#if defined(CONFIG_MQTT_LIB_TLS)
-	else if (client->transport.type == MQTT_TRANSPORT_SECURE) {
-		fds[0].fd = client->transport.tls.sock;
-	}
-#endif
+	(void)cb;
 
-	fds[0].events = POLLIN;
-	nfds          = 1;
-}
+	int                                 ret;
+	struct mqtt_topic                   topics[] = { {
+		                  .topic = { .utf8 = topic_name, .size = strlen(topic_name) },
+		                  .qos = 1,
+    } };
+	const struct mqtt_subscription_list sub_list = {
+		.list       = topics,
+		.list_count = ARRAY_SIZE(topics),
+		.message_id = 1u, // May need to change this id.
+	};
 
-static int wait(int timeout)
-{
-	int ret = 0;
+	printk("Subscribing to %hu topic(s)", sub_list.list_count);
 
-	if (nfds > 0) {
-		ret = poll(fds, nfds, timeout);
-		if (ret < 0) {
-			printk("poll error: %d", errno);
-		}
+	ret = mqtt_subscribe(&client_ctx, &sub_list);
+	if (ret != 0) {
+		printk("Failed to subscribe to topics: %d", ret);
 	}
 
 	return ret;
 }
 
-static int try_to_connect(struct mqtt_client* client)
+int mqtt_open(void)
 {
-	int rc, i = 0;
-
-	while (i++ < 5 && !connected) {
-		rc = mqtt_connect(client);
-		if (rc != 0) {
-			printk("mqtt_connect %d\n", rc);
-			k_sleep(K_MSEC(3000));
-			continue;
-		}
-
-		prepare_fds(client);
-
-		if (wait(5000)) {
-			mqtt_input(client);
-		}
-
-		if (!connected) {
-			mqtt_abort(client);
-		}
+	int error = mqtt_connect(&client_ctx);
+	if (error) {
+		return error;
 	}
 
-	if (connected) {
-		return 0;
+	if (client_ctx.transport.type == MQTT_TRANSPORT_NON_SECURE) {
+		fds[0].fd = client_ctx.transport.tcp.sock;
+	}
+#if defined(CONFIG_MQTT_LIB_TLS)
+	else if (client_ctx.transport.type == MQTT_TRANSPORT_SECURE) {
+		fds[0].fd = client_ctx.transport.tls.sock;
+	}
+#endif
+	fds[0].events = POLLIN;
+
+	int result = wait(5000);
+	if (!result) {
+		goto abort;
+	}
+	mqtt_input(&client_ctx);
+
+	if (!connected) {
+		goto abort;
 	}
 
-	return -EINVAL;
+	return 0;
+
+abort:
+	mqtt_abort(&client_ctx);
+	return -ENODATA;
 }
 
-void mqtt_evt_handler(struct mqtt_client* client, const struct mqtt_evt* evt)
+int mqtt_close()
+{
+	int error = 0;
+	if (client_ctx.transport.tcp.sock < 0) {
+		return -EINVAL;
+	}
+
+	error = mqtt_disconnect(&client_ctx);
+	if (error) {
+		return error;
+	}
+	error = close(client_ctx.transport.tcp.sock);
+	if (error) {
+		return error;
+	}
+
+	return error;
+}
+
+// Note: The idea about this thread is to buffer MQTT but also to recover from a MQTT disconnection!
+void mqtt_thread(void* arg1, void* arg2, void* arg3)
+{
+	int timeout = 0;
+	int result  = 0;
+	int error   = mqtt_open();
+	if (error) {
+		printk("Failed to open MQTT, error %d\n", error);
+	}
+
+	for (;;) {
+		timeout = mqtt_keepalive_time_left(&client_ctx);
+		if (timeout < 0) {
+			printk("ERROR mqtt_keepalive_time_left: %d\n", timeout);
+			break;
+		}
+
+		// Contiue here... Check for timeout.. wait.. blablabla
+
+		// // Check if something happens at TCP sock level (the one used for MQTT)
+		// result = poll(&fds, 1u, timeout);
+		// if (result < 0) {
+		// 	break;
+		// }
+
+		// if (fds.revents & POLLIN) {
+		// 	result = mqtt_input(&client_ctx);
+		// 	if (result != 0) {
+		// 		printk("Failed to read MQTT input: %d", result);
+		// 		break;
+		// 	}
+		// }
+
+		// if (fds.revents & (POLLHUP | POLLERR)) {
+		// 	printk("Socket closed/error");
+		// 	break;
+		// }
+
+		// result = mqtt_live(&client_ctx);
+		// if ((result != 0) && (result != -EAGAIN)) {
+		// 	printk("Failed to live MQTT: %d", result);
+		// 	break;
+		// }
+	}
+
+	mqtt_close();
+}
+
+static void broker_init(void)
+{
+	struct sockaddr_in* broker4 = (struct sockaddr_in*)&broker;
+
+	broker4->sin_family = AF_INET;
+	broker4->sin_port   = htons(1883);
+	inet_pton(AF_INET, "192.168.0.140", &broker4->sin_addr);
+}
+
+static int wait(int timeout)
+{
+	return poll(fds, 1, timeout);
+}
+
+static void mqtt_evt_handler(struct mqtt_client*    client,
+                             const struct mqtt_evt* evt)
 {
 	switch (evt->type) {
 	case MQTT_EVT_CONNACK:
@@ -125,7 +205,6 @@ void mqtt_evt_handler(struct mqtt_client* client, const struct mqtt_evt* evt)
 	case MQTT_EVT_DISCONNECT:
 		printk("MQTT client disconnected %d", evt->result);
 		connected = false;
-		nfds      = 0;
 		break;
 
 	case MQTT_EVT_PUBACK:
@@ -169,6 +248,7 @@ void mqtt_evt_handler(struct mqtt_client* client, const struct mqtt_evt* evt)
 		break;
 
 	default:
+		printk("Some other type of MQTT event: %d\n", evt->type);
 		break;
 	}
 }
