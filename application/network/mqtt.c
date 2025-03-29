@@ -1,4 +1,5 @@
 #include "mqtt.h"
+#include "netdb.h"
 #include "zephyr/kernel.h"
 #include "zephyr/sys/__assert.h"
 #include "zephyr/sys/printk.h"
@@ -138,7 +139,8 @@ void mqtt_thread(void* arg1, void* arg2, void* arg3)
 
 	for (;;) {
 		timeout = mqtt_keepalive_time_left(&client_ctx);
-		error   = mqtt_wait(timeout);
+		printk("Next MQTT heartbeat in -> %d\n", timeout);
+		error = mqtt_wait(timeout);
 		// timeout (if error == 0) is also valid.
 		__ASSERT(error >= 0,
 		         "Failed to wait for something in the MQTT TCP socket, "
@@ -158,14 +160,15 @@ void mqtt_thread(void* arg1, void* arg2, void* arg3)
 			}
 		}
 
+		printk("MQTT HEARBEAT\n");
 		error = mqtt_live(&client_ctx);
-		__ASSERT(error < 0 && error != -EAGAIN,
+		__ASSERT(error == 0 || error == -EAGAIN,
 		         "Faield to send mqtt hearbeat, error=%d\n",
 		         error);
 	}
 }
 
-static void mqtt_mqtt_broker_init(void)
+static void mqtt_broker_init(void)
 {
 	struct sockaddr_in* broker4 = (struct sockaddr_in*)&broker;
 
@@ -189,7 +192,7 @@ static void mqtt_evt_handler(struct mqtt_client*    client,
 			break;
 		}
 		connected = true;
-		printk("MQTT client connected!");
+		printk("MQTT client connected!\n");
 
 		break;
 
