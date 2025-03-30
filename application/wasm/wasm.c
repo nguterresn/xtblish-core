@@ -147,17 +147,15 @@ int wasm_boot_app(bool skip_runtime_init)
 int wasm_replace_app(uint8_t* src, uint32_t len)
 {
 	int error = 0;
-	error     = flash_area_erase(wasm_area, 0, len);
-	if (error || errno) {
-		printk("Failed to erase the flash! [%d:%d]\n", error, -errno);
+	error     = flash_area_erase(wasm_area, 0, WASM_FILE_MAX_SIZE * 4);
+	if (error < 0) {
+		printk("Failed to erase the flash! [%d]\n", error);
 		return error;
 	}
 
 	error = flash_area_write(wasm_area, 0, (uint32_t*)src, len);
-	if (error || errno) {
-		printk("Failed to write new app onto the flash! [%d:%d]\n",
-		       error,
-		       -errno);
+	if (error < 0) {
+		printk("Failed to write new app onto the flash! [%d]\n", error);
 		return error;
 	}
 

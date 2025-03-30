@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include <zephyr/net/mqtt.h>
 #include <zephyr/posix/arpa/inet.h>
+#include "app.h"
 
 #define MQTT_CONNECT_TIMEOUT 3000
 
@@ -261,6 +262,10 @@ static void mqtt_publish_handler(struct mqtt_client*    client,
                                               buf,
                                               evt->param.publish.message.payload
                                                   .len);
+
+		struct appq data = { .id = APP_FIRMWARE_AVAILABLE, .error = error };
+		app_send(&data);
+
 		printk("(mqtt_read_publish_payload) error=%d message=%s\n\n",
 		       error,
 		       buf);

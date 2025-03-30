@@ -14,9 +14,10 @@
 #include <zephyr/sys/__assert.h>
 #include <zephyr/sys/printk.h>
 
-#define HTTP_PORT        8080
+#define HTTP_PORT        3000
 #define EXAMPLE_hostname "http://example.com"
 #define DNS_TIMEOUT      (3 * MSEC_PER_SEC)
+#define HTTP_TIMEOUT     (3 * MSEC_PER_SEC)
 
 static void http_response_cb(struct http_response* res,
                              enum http_final_call final_data, void* user_data);
@@ -79,14 +80,14 @@ int http_get_from_local_server(const char* query, http_res_handle_cb callback)
 		return error;
 	}
 
-	error = http_client_req(socket, &req, 3000, callback);
+	error = http_client_req(socket, &req, HTTP_TIMEOUT, callback);
 	if (error < 0) {
 		printk("Failed to perform an HTTP request! error %d\n", error);
 		goto close_socket;
 	}
 
 	// Note: The following semaphore might be redundant... Check this out later on.
-	if (k_sem_take(&http_sem, K_MSEC(3000)) < 0) {
+	if (k_sem_take(&http_sem, K_MSEC(HTTP_TIMEOUT)) < 0) {
 		error = -ENOLCK;
 		printk("Failed to get a HTTP response!\n");
 	}
@@ -144,7 +145,7 @@ static void http_response_cb(struct http_response* res,
 		printk("** HTTP_DATA_MORE ** (%u bytes)\n\n", (uint32_t)res->data_len);
 	}
 	else if (final_data == HTTP_DATA_FINAL) {
-		printk("** HTTP_DATA_FINAL **(%u bytes)\n\n", (uint32_t)res->data_len);
+		printk("** HTTP_DATA_FINAL ** (%u bytes)\n\n", (uint32_t)res->data_len);
 	}
 
 	http_res_handle_cb callback = user_data;

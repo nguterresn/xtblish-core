@@ -46,10 +46,8 @@ int main(void)
 
 	k_sem_take(&new_ip, K_FOREVER);
 
-	__ASSERT(mqtt_setup() == 0, "MQTT has failed to setup connection\n");
-
-	N_THREAD(_mqtt_thread, mqtt_stack, mqtt_thread);
-	k_thread_name_set(&_mqtt_thread, "mqtt_thread");
 	N_THREAD(_app_thread, app_stack, app_thread);
 	k_thread_name_set(&_app_thread, "app_thread");
+	N_THREAD(_mqtt_thread, mqtt_stack, mqtt_thread);
+	k_thread_name_set(&_mqtt_thread, "mqtt_thread");
 }
