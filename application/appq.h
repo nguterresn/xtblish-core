@@ -8,11 +8,7 @@ enum appm {
 };
 
 struct appq_fw_available {
-	char url[64];
-};
-
-struct appq_fw_ready {
-	uint32_t length;
+	char query[128];
 };
 
 struct appq {
@@ -21,6 +17,5 @@ struct appq {
 
 	union {
 		struct appq_fw_available fw_available;
-		struct appq_fw_ready     fw_ready;
 	};
 } __packed;

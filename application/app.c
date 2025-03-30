@@ -84,8 +84,7 @@ static void app_http_download_callback(struct http_response* res,
 		wasm_file_index += res->body_frag_len;
 
 		if (final_data == HTTP_DATA_FINAL) {
-			struct appq data = { .id       = APP_FIRMWARE_READY,
-				                 .fw_ready = { .length = wasm_file_index } };
+			struct appq data = { .id = APP_FIRMWARE_READY };
 			k_msgq_put(&appq, &data, K_MSEC(1000));
 		}
 	}
@@ -97,17 +96,15 @@ static int app_handle_message(struct appq* data)
 
 	switch (data->id) {
 	case APP_FIRMWARE_AVAILABLE:
-		printk("Download File....\n");
 		memset(wasm_file, 0, sizeof(wasm_file));
-		return http_get_from_local_server("/firmware/124",
+		return http_get_from_local_server(data->fw_available.query,
 		                                  app_http_download_callback);
 
 	case APP_FIRMWARE_READY:
-		printk("\nReplacing app... with %d bytes\n", wasm_file_index);
 		error = wasm_replace_app(wasm_file, wasm_file_index);
 		printk("Done. Error: %d\n", error);
 		wasm_file_index = 0;
-		return 0;
+		return error;
 	}
 
 	return -EINVAL;

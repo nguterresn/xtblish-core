@@ -3,6 +3,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/sys/__assert.h>
 #include <zephyr/sys/printk.h>
+#include <zephyr/data/json.h>
 #include <stdint.h>
 #include <zephyr/net/mqtt.h>
 #include <zephyr/posix/arpa/inet.h>
@@ -17,16 +18,24 @@ static uint8_t tx_buffer[256];
 static bool          connected;
 static struct pollfd fds[1];
 
-static struct mqtt_topic topics[10];
-
 // Only one client and only one broker!
 static struct mqtt_client      client_ctx;
 static struct sockaddr_storage broker;
 
+struct mqtt_server_fw_update {
+	const char* query;
+};
+
+static const struct json_obj_descr server_fw_update_descr[] = {
+	JSON_OBJ_DESCR_PRIM(struct mqtt_server_fw_update, query, JSON_TOK_STRING),
+};
+
 static void mqtt_broker_init(void);
+static int  mqtt_setup(void);
 static int  mqtt_open(void);
 static int  mqtt_sub(const char* topic_name);
 static int  mqtt_close(void);
+
 static void mqtt_evt_handler(struct mqtt_client*    client,
                              const struct mqtt_evt* evt);
 static void mqtt_publish_handler(struct mqtt_client*    client,
@@ -56,17 +65,6 @@ int mqtt_init()
 	return 0;
 }
 
-int mqtt_setup()
-{
-	int error = 0;
-	error     = mqtt_open();
-	if (error) {
-		return error;
-	}
-
-	return mqtt_sub("firmware/124");
-}
-
 // Note: The idea about this thread is to buffer MQTT but also to recover from a MQTT disconnection!
 void mqtt_thread(void* arg1, void* arg2, void* arg3)
 {
@@ -74,7 +72,7 @@ void mqtt_thread(void* arg1, void* arg2, void* arg3)
 	int error   = 0;
 
 	for (;;) {
-		// In case server closes the connection.
+		// In case server closes the connection or is not yet connected.
 		if (!connected) {
 			error = mqtt_setup();
 			if (error) {
@@ -119,6 +117,17 @@ void mqtt_thread(void* arg1, void* arg2, void* arg3)
 		         "Faield to send mqtt hearbeat, error=%d\n",
 		         error);
 	}
+}
+
+static int mqtt_setup(void)
+{
+	int error = 0;
+	error     = mqtt_open();
+	if (error) {
+		return error;
+	}
+
+	return mqtt_sub("firmware/124");
 }
 
 static void mqtt_broker_init(void)
@@ -256,18 +265,41 @@ static void mqtt_publish_handler(struct mqtt_client*    client,
 	       evt->param.publish.message.topic.qos,
 	       evt->param.publish.message_id,
 	       evt->param.publish.message.payload.len);
-	if (evt->result == 0) {
-		char buf[evt->param.publish.message.payload.len];
-		int  error = mqtt_read_publish_payload(client,
-                                              buf,
-                                              evt->param.publish.message.payload
-                                                  .len);
 
-		struct appq data = { .id = APP_FIRMWARE_AVAILABLE, .error = error };
-		app_send(&data);
-
-		printk("(mqtt_read_publish_payload) error=%d message=%s\n\n",
-		       error,
-		       buf);
+	if (evt->result != 0) {
+		return;
 	}
+
+	char buf[evt->param.publish.message.payload.len];
+	int  error = mqtt_read_publish_payload(client,
+                                          buf,
+                                          evt->param.publish.message.payload
+                                              .len);
+	if (error < 0) {
+		printk("Failed to read mqtt payload error=%d\n", error);
+		return;
+	}
+
+	struct mqtt_server_fw_update server_fw_update = { 0 };
+	error                                         = json_obj_parse(buf,
+                           evt->param.publish.message.payload.len,
+                           server_fw_update_descr,
+                           ARRAY_SIZE(server_fw_update_descr),
+                           &server_fw_update);
+	if (error < 0) {
+		printk("Failed to parse JSON payload error=%d\n", error);
+		return;
+	}
+
+	struct appq data = { .id = APP_FIRMWARE_AVAILABLE, .error = error };
+	// Note: This copy may be redundant. Maybe pass struct appq instead of ?
+	strcpy(data.fw_available.query, server_fw_update.query);
+
+	app_send(&data);
+
+	printk("(mqtt_read_publish_payload) error=%d message='%s' "
+	       "query='%s'\n\n",
+	       error,
+	       buf,
+	       data.fw_available.query);
 }
