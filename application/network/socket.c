@@ -7,7 +7,6 @@ int socket_connect(int* sock, int type, int proto, struct sockaddr_in* addr,
 	addr->sin_family = AF_INET;
 	addr->sin_port   = htons(port);
 
-	// *sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 	*sock = socket(AF_INET, type, proto);
 	if (*sock < 0) {
 		printk("Failed to create IPv4 socket (%d)", -errno);

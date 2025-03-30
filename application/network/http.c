@@ -1,6 +1,7 @@
 #include "http.h"
 #include "dns.h"
 #include "socket.h"
+#include "server.h"
 #include <errno.h>
 #include <string.h>
 #include <sys/_stdint.h>
@@ -14,15 +15,10 @@
 #include <zephyr/sys/__assert.h>
 #include <zephyr/sys/printk.h>
 
-#define HTTP_PORT        3000
-#define EXAMPLE_hostname "http://example.com"
-#define DNS_TIMEOUT      (3 * MSEC_PER_SEC)
-#define HTTP_TIMEOUT     (3 * MSEC_PER_SEC)
-
 static void http_response_cb(struct http_response* res,
                              enum http_final_call final_data, void* user_data);
-static int  http_get_from_address(const char* hostname, const char* query,
-                                  http_res_handle_cb callback);
+static int  http_get_from_query(const char* hostname, const char* query,
+                                http_res_handle_cb callback);
 
 static uint8_t            recv_buf[512] = { 0 };
 static struct sockaddr_in ota_addr      = { .sin_addr = {
@@ -49,7 +45,7 @@ static void http_init_request(struct http_request* req, enum http_method method,
 	req->method       = method;
 	req->host         = hostname;
 	req->url          = query;
-	req->protocol     = "HTTP/1.1";
+	req->protocol     = SERVER_HTTP_PROTOCOL;
 	req->response     = http_response_cb;
 	req->recv_buf     = recv_buf;
 	req->recv_buf_len = sizeof(recv_buf);
@@ -69,25 +65,25 @@ int http_get_from_local_server(const char* query, http_res_handle_cb callback)
 	int                 socket = -1;
 	struct http_request req    = { 0 };
 
-	http_init_request(&req, HTTP_GET, "192.168.0.140", query);
+	http_init_request(&req, HTTP_GET, SERVER_IP, query);
 
 	error = socket_connect(&socket,
 	                       SOCK_STREAM,
 	                       IPPROTO_TCP,
 	                       (struct sockaddr_in*)&ota_addr,
-	                       HTTP_PORT);
+	                       SERVER_HTTP_PORT);
 	if (error < 0) {
 		return error;
 	}
 
-	error = http_client_req(socket, &req, HTTP_TIMEOUT, callback);
+	error = http_client_req(socket, &req, SERVER_HTTP_TIMEOUT, callback);
 	if (error < 0) {
 		printk("Failed to perform an HTTP request! error %d\n", error);
 		goto close_socket;
 	}
 
 	// Note: The following semaphore might be redundant... Check this out later on.
-	if (k_sem_take(&http_sem, K_MSEC(HTTP_TIMEOUT)) < 0) {
+	if (k_sem_take(&http_sem, K_MSEC(SERVER_HTTP_TIMEOUT)) < 0) {
 		error = -ENOLCK;
 		printk("Failed to get a HTTP response!\n");
 	}
@@ -97,8 +93,8 @@ close_socket:
 	return error;
 }
 
-static int http_get_from_address(const char* hostname, const char* query,
-                                 http_res_handle_cb callback)
+static int http_get_from_query(const char* hostname, const char* query,
+                               http_res_handle_cb callback)
 {
 	int                 error  = 0;
 	int                 socket = -1;
@@ -116,18 +112,18 @@ static int http_get_from_address(const char* hostname, const char* query,
 	                       SOCK_STREAM,
 	                       IPPROTO_TCP,
 	                       (struct sockaddr_in*)&dns_ctx.info.ai_addr,
-	                       HTTP_PORT);
+	                       SERVER_HTTP_PORT);
 	if (error < 0) {
 		return error;
 	}
 
-	error = http_client_req(socket, &req, 2000, callback);
+	error = http_client_req(socket, &req, SERVER_HTTP_TIMEOUT, callback);
 	if (error < 0) {
 		printk("Failed to perform an HTTP request! error %d\n", error);
 		goto close_socket;
 	}
 
-	if (k_sem_take(&http_sem, K_MSEC(1000)) < 0) {
+	if (k_sem_take(&http_sem, K_MSEC(SERVER_HTTP_TIMEOUT)) < 0) {
 		error = -ENOLCK;
 		printk("Failed to get a HTTP response!\n");
 		goto close_socket;

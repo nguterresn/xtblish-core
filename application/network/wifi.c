@@ -1,6 +1,5 @@
 #include "wifi.h"
 #include "cred.h"
-#include <sys/_intsup.h>
 #include <sys/errno.h>
 #include <zephyr/kernel.h>
 #include <zephyr/net/net_event.h>

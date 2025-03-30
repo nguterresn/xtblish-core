@@ -1,4 +1,5 @@
 #include "dns.h"
+#include "server.h"
 #include <zephyr/kernel.h>
 
 static void dns_result_cb(enum dns_resolve_status status,
@@ -43,7 +44,7 @@ int dns_resolve_ipv4(const char* hostname, struct dns_ctx* dns_ctx)
 	                              &dns_ctx->id,
 	                              dns_result_cb,
 	                              (struct dns_ctx*)&dns_ctx,
-	                              1000);
+	                              SERVER_DNS_TIMEOUT);
 
 	error < 0 ? printk("Cannot resolve IPv4 address (%d)\n", error)
 	          : printk("DNS id %u\n", dns_ctx->id);
@@ -52,7 +53,7 @@ int dns_resolve_ipv4(const char* hostname, struct dns_ctx* dns_ctx)
 		return error;
 	}
 
-	if (k_sem_take(&dns_ctx->sem, K_MSEC(1000)) < 0) {
+	if (k_sem_take(&dns_ctx->sem, K_MSEC(SERVER_DNS_TIMEOUT)) < 0) {
 		error = -ENOLCK;
 	}
 

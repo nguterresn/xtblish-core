@@ -8,12 +8,11 @@
 #include <zephyr/net/mqtt.h>
 #include <zephyr/posix/arpa/inet.h>
 #include "app.h"
-
-#define MQTT_CONNECT_TIMEOUT 3000
+#include "server.h"
 
 /* Buffers for MQTT client. */
-static uint8_t rx_buffer[256];
-static uint8_t tx_buffer[256];
+static uint8_t rx_buffer[SERVER_MQTT_BUFFER_SIZE];
+static uint8_t tx_buffer[SERVER_MQTT_BUFFER_SIZE];
 
 static bool          connected;
 static struct pollfd fds[1];
@@ -79,7 +78,7 @@ void mqtt_thread(void* arg1, void* arg2, void* arg3)
 				printk("MQTT couldn't establish connection to server! "
 				       "error=%d\n",
 				       error);
-				k_sleep(K_MSEC(MQTT_CONNECT_TIMEOUT));
+				k_sleep(K_MSEC(SERVER_MQTT_TIMEOUT));
 				continue;
 			}
 		}
@@ -135,8 +134,8 @@ static void mqtt_broker_init(void)
 	struct sockaddr_in* broker4 = (struct sockaddr_in*)&broker;
 
 	broker4->sin_family = AF_INET;
-	broker4->sin_port   = htons(1883);
-	inet_pton(AF_INET, "192.168.0.140", &broker4->sin_addr);
+	broker4->sin_port   = htons(SERVER_MQTT_PORT);
+	inet_pton(AF_INET, SERVER_IP, &broker4->sin_addr);
 }
 
 static int mqtt_open(void)
@@ -157,7 +156,7 @@ static int mqtt_open(void)
 	fds[0].events = POLLIN;
 
 	// error == 0 when timeout, error < 0 when error
-	error = poll(fds, 1, MQTT_CONNECT_TIMEOUT);
+	error = poll(fds, 1, SERVER_MQTT_TIMEOUT);
 	if (error <= 0) {
 		goto abort;
 	}
@@ -188,7 +187,7 @@ static int mqtt_sub(const char* topic_name)
 	const struct mqtt_subscription_list sub_list = {
 		.list       = topics,
 		.list_count = ARRAY_SIZE(topics),
-		.message_id = 1u, // May need to change this id.
+		.message_id = 1u, // TODO: May need to change this id.
 	};
 
 	printk("Subscribing to %hu topic(s) '%s'\n",
