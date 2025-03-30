@@ -1,8 +1,8 @@
 #include "mqtt.h"
-#include "netdb.h"
-#include "zephyr/kernel.h"
-#include "zephyr/sys/__assert.h"
-#include "zephyr/sys/printk.h"
+#include <stdbool.h>
+#include <zephyr/kernel.h>
+#include <zephyr/sys/__assert.h>
+#include <zephyr/sys/printk.h>
 #include <stdint.h>
 #include <zephyr/net/mqtt.h>
 #include <zephyr/posix/arpa/inet.h>
@@ -16,17 +16,20 @@ static uint8_t tx_buffer[256];
 static bool          connected;
 static struct pollfd fds[1];
 
+static struct mqtt_topic topics[10];
+
 // Only one client and only one broker!
 static struct mqtt_client      client_ctx;
 static struct sockaddr_storage broker;
 
-static bool do_publish   = false;
-static bool do_subscribe = false;
-
 static void mqtt_broker_init(void);
-static int  mqtt_wait(int timeout);
+static int  mqtt_open(void);
+static int  mqtt_sub(const char* topic_name);
+static int  mqtt_close(void);
 static void mqtt_evt_handler(struct mqtt_client*    client,
                              const struct mqtt_evt* evt);
+static void mqtt_publish_handler(struct mqtt_client*    client,
+                                 const struct mqtt_evt* evt);
 
 int mqtt_init()
 {
@@ -52,7 +55,81 @@ int mqtt_init()
 	return 0;
 }
 
-int mqtt_open(void)
+int mqtt_setup()
+{
+	int error = 0;
+	error     = mqtt_open();
+	if (error) {
+		return error;
+	}
+
+	return mqtt_sub("firmware/124");
+}
+
+// Note: The idea about this thread is to buffer MQTT but also to recover from a MQTT disconnection!
+void mqtt_thread(void* arg1, void* arg2, void* arg3)
+{
+	int timeout = 0;
+	int error   = 0;
+
+	for (;;) {
+		// In case server closes the connection.
+		if (!connected) {
+			error = mqtt_setup();
+			if (error) {
+				printk("MQTT couldn't establish connection to server! "
+				       "error=%d\n",
+				       error);
+				k_sleep(K_MSEC(MQTT_CONNECT_TIMEOUT));
+				continue;
+			}
+		}
+
+		// Connected.
+		timeout = mqtt_keepalive_time_left(&client_ctx);
+		error   = poll(fds, 1, timeout);
+		// timeout (if error == 0) is also valid.
+		__ASSERT(error >= 0,
+		         "Failed to wait for something in the MQTT TCP socket, "
+		         "error=%d\n",
+		         error);
+
+		if (fds[0].revents && error > 0) {
+			if (fds[0].revents & POLLIN) {
+				// If there's data, will trigger `mqtt_evt_handler`.
+				error = mqtt_input(&client_ctx);
+				if (!connected) {
+					// In case server closes the connection.
+					continue;
+				}
+				__ASSERT(error == 0,
+				         "Failed to to run mqtt_input socket, error=%d\n",
+				         error);
+			}
+			else if (fds[0].revents & (POLLHUP | POLLERR)) {
+				connected = false;
+				continue;
+			}
+		}
+
+		// If there's nothing else to do -> keep the connection alive.
+		error = mqtt_live(&client_ctx);
+		__ASSERT(error == 0 || error == -EAGAIN,
+		         "Faield to send mqtt hearbeat, error=%d\n",
+		         error);
+	}
+}
+
+static void mqtt_broker_init(void)
+{
+	struct sockaddr_in* broker4 = (struct sockaddr_in*)&broker;
+
+	broker4->sin_family = AF_INET;
+	broker4->sin_port   = htons(1883);
+	inet_pton(AF_INET, "192.168.0.140", &broker4->sin_addr);
+}
+
+static int mqtt_open(void)
 {
 	int error = mqtt_connect(&client_ctx);
 	if (error) {
@@ -70,7 +147,7 @@ int mqtt_open(void)
 	fds[0].events = POLLIN;
 
 	// error == 0 when timeout, error < 0 when error
-	error = mqtt_wait(MQTT_CONNECT_TIMEOUT);
+	error = poll(fds, 1, MQTT_CONNECT_TIMEOUT);
 	if (error <= 0) {
 		goto abort;
 	}
@@ -87,9 +164,11 @@ abort:
 	return error ? error : -ENODATA;
 }
 
-int mqtt_sub(const char* topic_name, void (*cb)())
+static int mqtt_sub(const char* topic_name)
 {
-	(void)cb;
+	if (!topic_name) {
+		return -EINVAL;
+	}
 
 	int                                 error    = 0;
 	struct mqtt_topic                   topics[] = { {
@@ -102,17 +181,19 @@ int mqtt_sub(const char* topic_name, void (*cb)())
 		.message_id = 1u, // May need to change this id.
 	};
 
-	printk("Subscribing to %hu topic(s)", sub_list.list_count);
+	printk("Subscribing to %hu topic(s) '%s'\n",
+	       sub_list.list_count,
+	       topic_name);
 
 	error = mqtt_subscribe(&client_ctx, &sub_list);
 	if (error < 0) {
-		printk("Failed to subscribe to topics: %d", error);
+		printk("Failed to subscribe to topics: %d\n", error);
 	}
 
 	return error;
 }
 
-int mqtt_close()
+static int mqtt_close(void)
 {
 	int error = 0;
 	if (client_ctx.transport.tcp.sock < 0) {
@@ -131,118 +212,57 @@ int mqtt_close()
 	return error;
 }
 
-// Note: The idea about this thread is to buffer MQTT but also to recover from a MQTT disconnection!
-void mqtt_thread(void* arg1, void* arg2, void* arg3)
-{
-	int timeout = 0;
-	int error   = 0;
-
-	for (;;) {
-		timeout = mqtt_keepalive_time_left(&client_ctx);
-		printk("Next MQTT heartbeat in -> %d\n", timeout);
-		error = mqtt_wait(timeout);
-		// timeout (if error == 0) is also valid.
-		__ASSERT(error >= 0,
-		         "Failed to wait for something in the MQTT TCP socket, "
-		         "error=%d\n",
-		         error);
-
-		if (fds[0].revents && error > 0) {
-			if (fds[0].revents & POLLIN) {
-				error = mqtt_input(&client_ctx);
-				__ASSERT(error == 0,
-				         "Failed to to run mqtt_input socket, error=%d\n",
-				         error);
-			}
-			else if (fds[0].revents & (POLLHUP | POLLERR)) {
-				// Handle this later.
-				__ASSERT(0, "Socket shouldn't have closed\n");
-			}
-		}
-
-		printk("MQTT HEARBEAT\n");
-		error = mqtt_live(&client_ctx);
-		__ASSERT(error == 0 || error == -EAGAIN,
-		         "Faield to send mqtt hearbeat, error=%d\n",
-		         error);
-	}
-}
-
-static void mqtt_broker_init(void)
-{
-	struct sockaddr_in* broker4 = (struct sockaddr_in*)&broker;
-
-	broker4->sin_family = AF_INET;
-	broker4->sin_port   = htons(1883);
-	inet_pton(AF_INET, "192.168.0.140", &broker4->sin_addr);
-}
-
-static int mqtt_wait(int timeout)
-{
-	return poll(fds, 1, timeout);
-}
-
 static void mqtt_evt_handler(struct mqtt_client*    client,
                              const struct mqtt_evt* evt)
 {
 	switch (evt->type) {
 	case MQTT_EVT_CONNACK:
-		if (evt->result != 0) {
-			printk("MQTT connect failed %d", evt->result);
-			break;
+		if (evt->result == 0) {
+			connected = true;
 		}
-		connected = true;
-		printk("MQTT client connected!\n");
-
+		printk("(MQTT_EVT_CONNACK) MQTT connect result %d\n", evt->result);
 		break;
 
 	case MQTT_EVT_DISCONNECT:
-		printk("MQTT client disconnected %d", evt->result);
+		printk("(MQTT_EVT_DISCONNECT) MQTT client disconnected %d\n",
+		       evt->result);
 		connected = false;
 		break;
 
-	case MQTT_EVT_PUBACK:
-		if (evt->result != 0) {
-			printk("MQTT PUBACK error %d", evt->result);
-			break;
-		}
-
-		printk("PUBACK packet id: %u", evt->param.puback.message_id);
+	case MQTT_EVT_PUBLISH:
+		mqtt_publish_handler(client, evt);
 		break;
 
-	case MQTT_EVT_PUBREC:
-		if (evt->result != 0) {
-			printk("MQTT PUBREC error %d", evt->result);
-			break;
-		}
-
-		printk("PUBREC packet id: %u", evt->param.pubrec.message_id);
-
-		const struct mqtt_pubrel_param rel_param = {
-			.message_id = evt->param.pubrec.message_id
-		};
-
-		int err = mqtt_publish_qos2_release(client, &rel_param);
-		if (err != 0) {
-			printk("Failed to send MQTT PUBREL: %d", err);
-		}
-
-		break;
-
-	case MQTT_EVT_PUBCOMP:
-		if (evt->result != 0) {
-			printk("MQTT PUBCOMP error %d", evt->result);
-			break;
-		}
-		printk("PUBCOMP packet id: %u", evt->param.pubcomp.message_id);
-		break;
-
-	case MQTT_EVT_PINGRESP:
-		printk("PINGRESP packet");
+	case MQTT_EVT_SUBACK:
+		printk("(MQTT_EVT_SUBACK) error=%d message_id=%d\n",
+		       evt->result,
+		       evt->param.suback.message_id);
 		break;
 
 	default:
-		printk("Some other type of MQTT event: %d\n", evt->type);
+		printk("(OTHER) MQTT evt_type=%d error=%d\n", evt->type, evt->result);
 		break;
+	}
+}
+
+static void mqtt_publish_handler(struct mqtt_client*    client,
+                                 const struct mqtt_evt* evt)
+{
+	printk("(MQTT_EVT_PUBLISH) error=%d topic='%s' qos=%d message_id=%d "
+	       "len=%u\n",
+	       evt->result,
+	       evt->param.publish.message.topic.topic.utf8,
+	       evt->param.publish.message.topic.qos,
+	       evt->param.publish.message_id,
+	       evt->param.publish.message.payload.len);
+	if (evt->result == 0) {
+		char buf[evt->param.publish.message.payload.len];
+		int  error = mqtt_read_publish_payload(client,
+                                              buf,
+                                              evt->param.publish.message.payload
+                                                  .len);
+		printk("(mqtt_read_publish_payload) error=%d message=%s\n\n",
+		       error,
+		       buf);
 	}
 }

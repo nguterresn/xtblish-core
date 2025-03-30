@@ -1,9 +1,11 @@
 CompileFlags:
   CompilationDatabase: build
-  Remove: [
-    -fno-printf-return-value,
-    -mfp16-format=*,
-    -fno-reorder-functions,
-    -mlongcalls,
-    -fstrict-volatile-bitfields
-  ]
+  Remove:
+    [
+      -fno-printf-return-value,
+      -mfp16-format=*,
+      -fno-reorder-functions,
+      -mlongcalls,
+      -fstrict-volatile-bitfields,
+    ]
+header-insertion: never
