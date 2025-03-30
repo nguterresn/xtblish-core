@@ -1,5 +1,3 @@
 #pragma once
-#include <zephyr/net/net_ip.h>
 
-int socket_connect(int* sock, int type, int proto, struct sockaddr_in* addr,
-                   int port);
+int socket_connect(int* sock, int type, int proto, const char* ip, int port);

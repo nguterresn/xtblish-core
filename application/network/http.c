@@ -20,9 +20,7 @@ static void http_response_cb(struct http_response* res,
 static int  http_get_from_query(const char* hostname, const char* query,
                                 http_res_handle_cb callback);
 
-static uint8_t            recv_buf[512] = { 0 };
-static struct sockaddr_in ota_addr      = { .sin_addr = {
-	                                            .s4_addr = { 192, 168, 0, 140 } } };
+static uint8_t recv_buf[512] = { 0 };
 
 static struct k_sem   http_sem;
 static struct dns_ctx dns_ctx = { 0 };
@@ -70,7 +68,7 @@ int http_get_from_local_server(const char* query, http_res_handle_cb callback)
 	error = socket_connect(&socket,
 	                       SOCK_STREAM,
 	                       IPPROTO_TCP,
-	                       (struct sockaddr_in*)&ota_addr,
+	                       SERVER_IP,
 	                       SERVER_HTTP_PORT);
 	if (error < 0) {
 		return error;
