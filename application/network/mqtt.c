@@ -23,15 +23,11 @@ static struct mqtt_client      client_ctx;
 static struct sockaddr_storage broker;
 
 struct mqtt_server_fw_query {
-	const char* prefix;
-	const char* id;
-	const char* version;
+	const char* url;
 };
 
 static const struct json_obj_descr server_fw_update_descr[] = {
-	JSON_OBJ_DESCR_PRIM(struct mqtt_server_fw_query, prefix, JSON_TOK_STRING),
-	JSON_OBJ_DESCR_PRIM(struct mqtt_server_fw_query, id, JSON_TOK_STRING),
-	JSON_OBJ_DESCR_PRIM(struct mqtt_server_fw_query, version, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM(struct mqtt_server_fw_query, url, JSON_TOK_STRING),
 };
 
 static void mqtt_broker_init(void);
@@ -284,10 +280,6 @@ static void mqtt_publish_handler(struct mqtt_client*    client,
 		return;
 	}
 
-	printk("Buffer [%d] received: %s\n",
-	       evt->param.publish.message.payload.len,
-	       buf);
-
 	struct mqtt_server_fw_query server_fw_query = { 0 };
 	error                                       = json_obj_parse(buf,
                            evt->param.publish.message.payload.len,
@@ -301,19 +293,12 @@ static void mqtt_publish_handler(struct mqtt_client*    client,
 
 	struct appq data = { .id = APP_FIRMWARE_AVAILABLE, .error = error };
 	// Note: This copy may be redundant. Maybe pass struct appq instead of ?
-	memcpy(data.fw_query.prefix,
-	       server_fw_query.prefix,
-	       strlen(server_fw_query.prefix));
-	memcpy(data.fw_query.id, server_fw_query.id, strlen(server_fw_query.id));
-	memcpy(data.fw_query.version,
-	       server_fw_query.version,
-	       strlen(server_fw_query.version));
-
+	strcpy(data.url, server_fw_query.url);
 	app_send(&data);
 
 	printk("(mqtt_read_publish_payload) error=%d message='%s' "
-	       "prefix='%s'\n\n",
+	       "url='%s'\n\n",
 	       error,
 	       buf,
-	       data.fw_query.prefix);
+	       server_fw_query.url);
 }

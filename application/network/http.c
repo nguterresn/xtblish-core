@@ -136,7 +136,7 @@ static void http_response_cb(struct http_response* res,
                              enum http_final_call final_data, void* user_data)
 {
 	if (final_data == HTTP_DATA_MORE) {
-		printk("** HTTP_DATA_MORE ** (%u bytes)\n\n", (uint32_t)res->data_len);
+		// printk("** HTTP_DATA_MORE ** (%u bytes)\n\n", (uint32_t)res->data_len);
 	}
 	else if (final_data == HTTP_DATA_FINAL) {
 		printk("** HTTP_DATA_FINAL ** (%u bytes)\n\n", (uint32_t)res->data_len);

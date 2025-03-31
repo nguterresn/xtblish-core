@@ -9,10 +9,12 @@ manifest:
         name-allowlist:
           - cmsis
           - hal_xtensa
+          - hal_espressif
           - lvgl
           - mbedtls
           - mcuboot
           - trusted-firmware-m
+          - net-tools
 
     - name: wasm-micro-runtime
       revision: main

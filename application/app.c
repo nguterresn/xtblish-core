@@ -2,8 +2,8 @@
 #include "appq.h"
 #include "wasm/wasm.h"
 #include "http.h"
-#include "mqtt.h"
 #include "stdio.h"
+#include "zephyr/fatal_types.h"
 #include <zephyr/kernel.h>
 #include <zephyr/data/json.h>
 #include <zephyr/net/http/client.h>
@@ -20,8 +20,6 @@ static struct sys_memory_stats stats;
 static int  app_handle_message(struct appq* data);
 static void app_http_download_callback(struct http_response* res,
                                        enum http_final_call  final_data);
-static int  app_data_to_http_query(struct appq* data, char* buffer,
-                                   uint32_t buffer_len);
 
 // (!) Important Note:
 // Due to the way the Wifi manages the heap, it should be correclty initialized
@@ -73,11 +71,8 @@ static int app_handle_message(struct appq* data)
 	switch (data->id) {
 	case APP_FIRMWARE_AVAILABLE:
 		memset(wasm_file, 0, sizeof(wasm_file));
-		char buf[128];
-		error = app_data_to_http_query(data, buf, sizeof(buf));
-		return error ? error
-		             : http_get_from_local_server(buf,
-		                                          app_http_download_callback);
+		return http_get_from_local_server(data->url,
+		                                  app_http_download_callback);
 
 	case APP_FIRMWARE_READY:
 		error = wasm_replace_app(wasm_file, wasm_file_index);
@@ -92,7 +87,7 @@ static int app_handle_message(struct appq* data)
 static void app_http_download_callback(struct http_response* res,
                                        enum http_final_call  final_data)
 {
-	if (199 < res->http_status_code || res->http_status_code >= 300) {
+	if (199 > res->http_status_code || res->http_status_code >= 300) {
 		return;
 	}
 
@@ -109,35 +104,4 @@ static void app_http_download_callback(struct http_response* res,
 		struct appq data = { .id = APP_FIRMWARE_READY };
 		app_send(&data);
 	}
-}
-
-static int app_data_to_http_query(struct appq* data, char* buffer,
-                                  uint32_t buffer_len)
-{
-	if (data == NULL || buffer == NULL || !buffer_len) {
-		return -EINVAL;
-	}
-
-	// Long shot but it works for now.
-	if (buffer_len < sizeof(struct appq_fw_query) + sizeof(APPQ_FW_QUERY_FMT)) {
-		return -ENOMEM;
-	}
-
-	int result = snprintf(buffer,
-	                      buffer_len,
-	                      APPQ_FW_QUERY_FMT,
-	                      data->fw_query.prefix,
-	                      sizeof(data->fw_query.id),
-	                      data->fw_query.id,
-	                      sizeof(data->fw_query.version),
-	                      data->fw_query.version);
-
-	if (result < 0) {
-		return -EIO;
-	}
-	else if (result > buffer_len) {
-		return -ENOBUFS;
-	}
-
-	return 0;
 }
