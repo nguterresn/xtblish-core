@@ -8,6 +8,7 @@
 #include <zephyr/net/mqtt.h>
 #include <zephyr/posix/arpa/inet.h>
 #include "app.h"
+#include "appq.h"
 #include "server.h"
 
 /* Buffers for MQTT client. */
@@ -21,12 +22,16 @@ static struct pollfd fds[1];
 static struct mqtt_client      client_ctx;
 static struct sockaddr_storage broker;
 
-struct mqtt_server_fw_update {
-	const char* query;
+struct mqtt_server_fw_query {
+	const char* prefix;
+	const char* id;
+	const char* version;
 };
 
 static const struct json_obj_descr server_fw_update_descr[] = {
-	JSON_OBJ_DESCR_PRIM(struct mqtt_server_fw_update, query, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM(struct mqtt_server_fw_query, prefix, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM(struct mqtt_server_fw_query, id, JSON_TOK_STRING),
+	JSON_OBJ_DESCR_PRIM(struct mqtt_server_fw_query, version, JSON_TOK_STRING),
 };
 
 static void mqtt_broker_init(void);
@@ -265,7 +270,7 @@ static void mqtt_publish_handler(struct mqtt_client*    client,
 	       evt->param.publish.message_id,
 	       evt->param.publish.message.payload.len);
 
-	if (evt->result != 0) {
+	if (evt->result != 0 || !evt->param.publish.message.payload.len) {
 		return;
 	}
 
@@ -279,12 +284,16 @@ static void mqtt_publish_handler(struct mqtt_client*    client,
 		return;
 	}
 
-	struct mqtt_server_fw_update server_fw_update = { 0 };
-	error                                         = json_obj_parse(buf,
+	printk("Buffer [%d] received: %s\n",
+	       evt->param.publish.message.payload.len,
+	       buf);
+
+	struct mqtt_server_fw_query server_fw_query = { 0 };
+	error                                       = json_obj_parse(buf,
                            evt->param.publish.message.payload.len,
                            server_fw_update_descr,
                            ARRAY_SIZE(server_fw_update_descr),
-                           &server_fw_update);
+                           &server_fw_query);
 	if (error < 0) {
 		printk("Failed to parse JSON payload error=%d\n", error);
 		return;
@@ -292,13 +301,19 @@ static void mqtt_publish_handler(struct mqtt_client*    client,
 
 	struct appq data = { .id = APP_FIRMWARE_AVAILABLE, .error = error };
 	// Note: This copy may be redundant. Maybe pass struct appq instead of ?
-	strcpy(data.fw_available.query, server_fw_update.query);
+	memcpy(data.fw_query.prefix,
+	       server_fw_query.prefix,
+	       strlen(server_fw_query.prefix));
+	memcpy(data.fw_query.id, server_fw_query.id, strlen(server_fw_query.id));
+	memcpy(data.fw_query.version,
+	       server_fw_query.version,
+	       strlen(server_fw_query.version));
 
 	app_send(&data);
 
 	printk("(mqtt_read_publish_payload) error=%d message='%s' "
-	       "query='%s'\n\n",
+	       "prefix='%s'\n\n",
 	       error,
 	       buf,
-	       data.fw_available.query);
+	       data.fw_query.prefix);
 }

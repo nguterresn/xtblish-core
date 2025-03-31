@@ -1,10 +1,12 @@
 #include <zephyr/kernel.h>
 #include <zephyr/kernel/thread.h>
 #include <zephyr/sys/__assert.h>
+#include <zephyr/drivers/hwinfo.h>
 #include "app.h"
 #include "network/wifi.h"
 #include "network/http.h"
 #include "network/mqtt.h"
+#include "zephyr/sys/printk.h"
 
 #define N_THREAD(thread, stack, func)             \
 	k_thread_create(&thread,                      \
@@ -36,6 +38,10 @@ extern struct k_sem new_ip;
 int main(void)
 {
 	int error = 0;
+
+	uint8_t euid[64] = { 0 };
+	error            = hwinfo_get_device_id(euid, sizeof(euid));
+	printk("[%d] DEVICE UID: ** %s **\n\n", error, euid);
 
 	__ASSERT(wifi_init() == 0, "WiFi has failed to initialized\n");
 	__ASSERT(app_init() == 0, "App has failed to initialized\n");

@@ -3,6 +3,7 @@
 #include "wasm/wasm.h"
 #include "http.h"
 #include "mqtt.h"
+#include <stdio.h>
 #include <zephyr/kernel.h>
 #include <zephyr/data/json.h>
 #include <zephyr/net/http/client.h>
@@ -97,8 +98,17 @@ static int app_handle_message(struct appq* data)
 	switch (data->id) {
 	case APP_FIRMWARE_AVAILABLE:
 		memset(wasm_file, 0, sizeof(wasm_file));
-		return http_get_from_local_server(data->fw_available.query,
-		                                  app_http_download_callback);
+		char buf[128];
+		snprintf(buf,
+		         sizeof(buf),
+		         APPQ_FW_QUERY_FMT,
+		         data->fw_query.prefix,
+		         sizeof(data->fw_query.id),
+		         data->fw_query.id,
+		         sizeof(data->fw_query.version),
+		         data->fw_query.version);
+		
+		return http_get_from_local_server(buf, app_http_download_callback);
 
 	case APP_FIRMWARE_READY:
 		error = wasm_replace_app(wasm_file, wasm_file_index);
