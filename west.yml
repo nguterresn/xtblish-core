@@ -5,7 +5,14 @@ manifest:
       revision: v3.7.1
       path: zephyr
       url: https://github.com/zephyrproject-rtos/zephyr.git
-      import: true
+      import:
+        name-allowlist:
+          - cmsis
+          - hal_xtensa
+          - lvgl
+          - mbedtls
+          - mcuboot
+          - trusted-firmware-m
 
     - name: wasm-micro-runtime
       revision: main
