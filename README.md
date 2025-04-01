@@ -1,3 +1,17 @@
+# xtblish MVP
+
+The current behaviour:
+
+```mermaid
+sequenceDiagram
+    Device->>Server: CONNECT
+    Device->>Server: SUB /firmware/:id
+    Client->>Server: POST /firmware/:id
+    Server->>Device: PUB /firmware/:id/:version
+    Device->>Server: GET /firmware/:id/:version
+    Device->>Device: load new image
+```
+
 # xtblish Proof of Concept (PoC)
 
 ## Introduction
