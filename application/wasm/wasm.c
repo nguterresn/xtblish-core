@@ -46,8 +46,10 @@ static RuntimeInitArgs runtime_args = {
 // Storage partition has size of 0x6000, thus 6144 words.
 __aligned(4) uint8_t wasm_file[WASM_FILE_MAX_SIZE * 4] = { 0 };
 
-static const uint32_t stack_size = 4096;
-static const uint32_t heap_size  = 0;
+extern struct sys_heap         _system_heap;
+static struct sys_memory_stats stats;
+static const uint32_t          stack_size = 4096;
+static const uint32_t          heap_size  = 0;
 
 static wasm_module_t      module      = NULL;
 static wasm_module_inst_t module_inst = NULL;
@@ -92,13 +94,19 @@ int wasm_init()
 int wasm_load_app(uint8_t* src, uint32_t len)
 {
 	int error = 0;
-	error     = flash_area_erase(wasm_area, 0, WASM_FILE_MAX_SIZE * 4);
+	// int sectors_to_erase = len / 4096;
+
+	if (len >= (WASM_FILE_MAX_SIZE * 4)) {
+		return -ENOMEM;
+	}
+
+	error = flash_area_erase(wasm_area, 0, WASM_FILE_MAX_SIZE * 4);
 	if (error < 0) {
 		printk("Failed to erase the flash! [%d]\n", error);
 		return error;
 	}
 
-	error = flash_area_write(wasm_area, 0, (uint32_t*)src, len);
+	error = flash_area_write(wasm_area, 0, src, len);
 	if (error < 0) {
 		printk("Failed to write new app onto the flash! [%d]\n", error);
 		return error;
@@ -177,6 +185,12 @@ static int wasm_boot_app()
 		printk("Failed to call 'hello_world'\n");
 		return -EPERM;
 	}
+
+	sys_heap_runtime_stats_get(&_system_heap, &stats);
+
+	printk("\n\nINFO: Allocated Heap = %zu\n", stats.allocated_bytes);
+	printk("INFO: Free Heap = %zu\n", stats.free_bytes);
+	printk("INFO: Max Allocated Heap = %zu\n\n\n", stats.max_allocated_bytes);
 
 	return 0;
 }

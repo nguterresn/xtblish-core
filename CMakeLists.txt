@@ -25,35 +25,10 @@ include(wasm.cmake) # Include WASM related CMake variables.
 set(WAMR_ROOT_DIR ${CMAKE_SOURCE_DIR}/libs/wasm-micro-runtime)
 include (${WAMR_ROOT_DIR}/build-scripts/runtime_lib.cmake)
 
-# Compile Assembly Script and generate debug.wasm #
-
-file(GLOB TS_FILES ${CMAKE_SOURCE_DIR}/application/assem/assembly/*.ts)
-set(WASM_OUTPUT ${CMAKE_SOURCE_DIR}/application/assem/build/debug.wasm)
-set(WASM_AS_INDEX ${CMAKE_SOURCE_DIR}/application/assem/assembly/index.ts)
-set(BINARY_OUTPUT ${CMAKE_SOURCE_DIR}/application/assem/build/signed-debug.bin)
-
-add_custom_target(rel-wasm ALL DEPENDS ${WASM_OUTPUT})
-add_custom_command(
-  OUTPUT ${WASM_OUTPUT} ${BINARY_OUTPUT}
-  DEPENDS ${TS_FILES}
-  COMMENT "Running xtblish-client: compile, sign and deploy WASM application"
-  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/application/assem
-  COMMAND npx xtblish -s assembly/index.ts -u 124 -c xtblish.json --dev
-)
-
 FILE(GLOB_RECURSE app_sources application/*.c)
 target_sources(app PRIVATE ${WAMR_RUNTIME_LIB_SOURCE} ${app_sources})
 target_include_directories(app PRIVATE
   ${CMAKE_SOURCE_DIR}/application
   ${CMAKE_SOURCE_DIR}/application/wasm
   ${CMAKE_SOURCE_DIR}/application/network
-)
-
-# Print app and wasm binary size
-add_custom_command(
-  POST_BUILD
-  TARGET app
-  COMMAND ls -l ${CMAKE_BINARY_DIR}/app
-  COMMAND ls -l ${WASM_OUTPUT}
-  COMMAND ls -l ${BINARY_OUTPUT}
 )

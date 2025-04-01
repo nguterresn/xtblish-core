@@ -183,7 +183,7 @@ static int mqtt_sub(const char* topic_name)
 	int                                 error    = 0;
 	struct mqtt_topic                   topics[] = { {
 		                  .topic = { .utf8 = topic_name, .size = strlen(topic_name) },
-		                  .qos = 1,
+		                  .qos = 0,
     } };
 	const struct mqtt_subscription_list sub_list = {
 		.list       = topics,
@@ -296,9 +296,5 @@ static void mqtt_publish_handler(struct mqtt_client*    client,
 	strcpy(data.url, server_fw_query.url);
 	app_send(&data);
 
-	printk("(mqtt_read_publish_payload) error=%d message='%s' "
-	       "url='%s'\n\n",
-	       error,
-	       buf,
-	       server_fw_query.url);
+	printk("(mqtt_read_publish_payload) error=%d message='%s'\n\n", error, buf);
 }

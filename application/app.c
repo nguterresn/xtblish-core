@@ -10,11 +10,9 @@
 
 K_MSGQ_DEFINE(appq, sizeof(struct appq), 5, 1); // len: 5
 
-extern struct sys_heap _system_heap;
 extern uint8_t         wasm_file[WASM_FILE_MAX_SIZE * 4];
 
 static uint32_t                wasm_file_index = 0;
-static struct sys_memory_stats stats;
 
 static int  app_handle_message(struct appq* data);
 static void app_http_download_callback(struct http_response* res,
@@ -40,15 +38,6 @@ void app_thread(void* arg1, void* arg2, void* arg3)
 	struct appq data  = { 0 };
 
 	printk("Start 'app_thread'\n");
-
-	// printk("\n\n** START WASM_RUNTIME ! **\n");
-
-	// __ASSERT(wasm_boot_app(false) == 0, "Failed to boot app\n");
-	// sys_heap_runtime_stats_get(&_system_heap, &stats);
-
-	// printk("\n\nINFO: Allocated Heap = %zu\n", stats.allocated_bytes);
-	// printk("INFO: Free Heap = %zu\n", stats.free_bytes);
-	// printk("INFO: Max Allocated Heap = %zu\n\n\n", stats.max_allocated_bytes);
 
 	/// ------ ///
 
