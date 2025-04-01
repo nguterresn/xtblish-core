@@ -94,7 +94,6 @@ int wasm_init()
 int wasm_load_app(uint8_t* src, uint32_t len)
 {
 	int error = 0;
-	// int sectors_to_erase = len / 4096;
 
 	if (len >= (WASM_FILE_MAX_SIZE * 4)) {
 		return -ENOMEM;
