@@ -37,6 +37,10 @@ block-beta
     end
 ```
 
+## Provisioning
+
+Provide an identity to a device and OTP a few things.
+
 # xtblish Proof of Concept (PoC)
 
 ## Introduction
