@@ -1,6 +1,6 @@
 # xtblish MVP
 
-## Deploy Flow
+## WASM Firmware Deploy Flow
 
 The current behaviour:
 
@@ -14,7 +14,7 @@ sequenceDiagram
     Device->>Device: load new image
 ```
 
-## Firmwre Binary
+## WASM Firmware Binary
 
 The firmware binary is made of:
 

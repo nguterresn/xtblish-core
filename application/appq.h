@@ -4,7 +4,7 @@
 
 enum appq_msg {
 	APP_FIRMWARE_AVAILABLE,
-	APP_FIRMWARE_READY,
+	APP_FIRMWARE_BOOT,
 };
 
 struct appq {

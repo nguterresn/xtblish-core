@@ -4,5 +4,5 @@
 
 #define WASM_FILE_MAX_SIZE 6144 // In words!
 
-int wasm_boot_app(bool skip_runtime_init);
-int wasm_replace_app(uint8_t* src, uint32_t len);
+int wasm_init();
+int wasm_load_app(uint8_t* src, uint32_t len);

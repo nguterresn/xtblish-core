@@ -3,7 +3,6 @@
 #include "wasm/wasm.h"
 #include "http.h"
 #include "stdio.h"
-#include "zephyr/fatal_types.h"
 #include <zephyr/kernel.h>
 #include <zephyr/data/json.h>
 #include <zephyr/net/http/client.h>
@@ -42,14 +41,14 @@ void app_thread(void* arg1, void* arg2, void* arg3)
 
 	printk("Start 'app_thread'\n");
 
-	printk("\n\n** START WASM_RUNTIME ! **\n");
+	// printk("\n\n** START WASM_RUNTIME ! **\n");
 
-	__ASSERT(wasm_boot_app(false) == 0, "Failed to boot app\n");
-	sys_heap_runtime_stats_get(&_system_heap, &stats);
+	// __ASSERT(wasm_boot_app(false) == 0, "Failed to boot app\n");
+	// sys_heap_runtime_stats_get(&_system_heap, &stats);
 
-	printk("\n\nINFO: Allocated Heap = %zu\n", stats.allocated_bytes);
-	printk("INFO: Free Heap = %zu\n", stats.free_bytes);
-	printk("INFO: Max Allocated Heap = %zu\n\n\n", stats.max_allocated_bytes);
+	// printk("\n\nINFO: Allocated Heap = %zu\n", stats.allocated_bytes);
+	// printk("INFO: Free Heap = %zu\n", stats.free_bytes);
+	// printk("INFO: Max Allocated Heap = %zu\n\n\n", stats.max_allocated_bytes);
 
 	/// ------ ///
 
@@ -74,8 +73,8 @@ static int app_handle_message(struct appq* data)
 		return http_get_from_local_server(data->url,
 		                                  app_http_download_callback);
 
-	case APP_FIRMWARE_READY:
-		error = wasm_replace_app(wasm_file, wasm_file_index);
+	case APP_FIRMWARE_BOOT:
+		error = wasm_load_app(wasm_file, wasm_file_index);
 		printk("Done. Error: %d\n", error);
 		wasm_file_index = 0;
 		return error;
@@ -101,7 +100,7 @@ static void app_http_download_callback(struct http_response* res,
 	wasm_file_index += res->body_frag_len;
 
 	if (final_data == HTTP_DATA_FINAL) {
-		struct appq data = { .id = APP_FIRMWARE_READY };
+		struct appq data = { .id = APP_FIRMWARE_BOOT };
 		app_send(&data);
 	}
 }

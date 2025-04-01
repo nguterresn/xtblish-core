@@ -1,5 +1,6 @@
 #include "wasm.h"
 #include "wasm_export.h"
+#include <stdbool.h>
 #include <sys/_stdint.h>
 #include <sys/errno.h>
 #include <zephyr/kernel.h>
@@ -53,37 +54,73 @@ static wasm_module_inst_t module_inst = NULL;
 static wasm_exec_env_t    exec_env    = NULL;
 
 static const struct flash_area* wasm_area = NULL;
+static int                      wasm_boot_app();
 
-int wasm_boot_app(bool skip_runtime_init)
+int wasm_init()
+{
+	int  error  = 0;
+	bool result = false;
+
+	result = wasm_runtime_full_init(&runtime_args);
+	if (!result) {
+		printk("Failed to initialize the runtime.\n");
+		return -EPERM;
+	}
+
+	result = wasm_runtime_register_natives("env",
+	                                       native_symbols,
+	                                       sizeof(native_symbols) /
+	                                           sizeof(NativeSymbol));
+	if (!result) {
+		printk("Failed to export native symbols!");
+		return -EPERM;
+	}
+
+	error = flash_area_open(FIXED_PARTITION_ID(storage_partition), &wasm_area);
+	if (error < 0) {
+		printk("Error while opening flash partition 'storage_partition'");
+		return error;
+	}
+
+	printk("Part offset 0x%08x part size %u\n",
+	       (uint32_t)wasm_area->fa_off,
+	       (uint32_t)wasm_area->fa_size);
+
+	return 0;
+}
+
+int wasm_load_app(uint8_t* src, uint32_t len)
+{
+	int error = 0;
+	error     = flash_area_erase(wasm_area, 0, WASM_FILE_MAX_SIZE * 4);
+	if (error < 0) {
+		printk("Failed to erase the flash! [%d]\n", error);
+		return error;
+	}
+
+	error = flash_area_write(wasm_area, 0, (uint32_t*)src, len);
+	if (error < 0) {
+		printk("Failed to write new app onto the flash! [%d]\n", error);
+		return error;
+	}
+
+	if (exec_env) {
+		wasm_runtime_destroy_exec_env(exec_env);
+	}
+	if (module_inst) {
+		wasm_runtime_deinstantiate(module_inst);
+	}
+	if (module) {
+		wasm_runtime_unload(module);
+	}
+
+	return wasm_boot_app();
+}
+
+static int wasm_boot_app()
 {
 	char error_buf[128] = { 0 };
 	int  error          = 0;
-
-	if (!skip_runtime_init) {
-		bool result = wasm_runtime_full_init(&runtime_args);
-		if (!result) {
-			printk("Failed to initialize the runtime.\n");
-			return -EPERM;
-		}
-
-		if (!wasm_runtime_register_natives("env",
-		                                   native_symbols,
-		                                   sizeof(native_symbols) /
-		                                       sizeof(NativeSymbol))) {
-			printk("Failed to export native symbols!");
-			return -EPERM;
-		}
-
-		error = flash_area_open(FIXED_PARTITION_ID(storage_partition),
-		                        &wasm_area);
-		if (error) {
-			printk("Error while opening flash partition 'storage_partition'");
-			return error;
-		}
-		printk("Part offset 0x%08x part size %u\n",
-		       (uint32_t)wasm_area->fa_off,
-		       (uint32_t)wasm_area->fa_size);
-	}
 
 	error = flash_area_read(wasm_area, 0, wasm_file, wasm_area->fa_size);
 	if (error) {
@@ -142,26 +179,4 @@ int wasm_boot_app(bool skip_runtime_init)
 	}
 
 	return 0;
-}
-
-int wasm_replace_app(uint8_t* src, uint32_t len)
-{
-	int error = 0;
-	error     = flash_area_erase(wasm_area, 0, WASM_FILE_MAX_SIZE * 4);
-	if (error < 0) {
-		printk("Failed to erase the flash! [%d]\n", error);
-		return error;
-	}
-
-	error = flash_area_write(wasm_area, 0, (uint32_t*)src, len);
-	if (error < 0) {
-		printk("Failed to write new app onto the flash! [%d]\n", error);
-		return error;
-	}
-
-	wasm_runtime_destroy_exec_env(exec_env);
-	wasm_runtime_deinstantiate(module_inst);
-	wasm_runtime_unload(module);
-
-	return wasm_boot_app(true);
 }

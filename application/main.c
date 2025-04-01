@@ -3,6 +3,7 @@
 #include <zephyr/sys/__assert.h>
 #include <zephyr/drivers/hwinfo.h>
 #include "app.h"
+#include "wasm/wasm.h"
 #include "network/wifi.h"
 #include "network/http.h"
 #include "network/mqtt.h"
@@ -44,9 +45,9 @@ int main(void)
 	printk("[%d] DEVICE UID: ** %s **\n\n", error, euid);
 
 	__ASSERT(wifi_init() == 0, "WiFi has failed to initialized\n");
-	__ASSERT(app_init() == 0, "App has failed to initialized\n");
 	__ASSERT(http_init() == 0, "HTTP has failed to initialized\n");
 	__ASSERT(mqtt_init() == 0, "MQTT has failed to initialized\n");
+	__ASSERT(wasm_init() == 0, "WASM has failed to initialized\n");
 
 	__ASSERT(wifi_connect() == 0, "WiFi has failed to start a connection\n");
 
