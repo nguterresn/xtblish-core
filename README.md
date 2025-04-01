@@ -1,5 +1,7 @@
 # xtblish MVP
 
+## Deploy Flow
+
 The current behaviour:
 
 ```mermaid
@@ -10,6 +12,29 @@ sequenceDiagram
     Server->>Device: PUB /firmware/:id/:version
     Device->>Server: GET /firmware/:id/:version
     Device->>Device: load new image
+```
+
+## Firmwre Binary
+
+The firmware binary is made of:
+
+```mermaid
+block-beta
+    columns 3
+    a["32"] b["512"] c["N"]
+    d["Hash"] e["Configuration"] f[".wasm"]
+```
+
+```mermaid
+block-beta
+    columns 1
+    g["Configuration"]
+    block
+        a["16"] b["496"]
+    end
+    block
+        d["Device ID"] e["Reserved"]
+    end
 ```
 
 # xtblish Proof of Concept (PoC)
