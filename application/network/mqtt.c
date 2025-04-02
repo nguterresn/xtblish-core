@@ -270,6 +270,11 @@ static void mqtt_publish_handler(struct mqtt_client*    client,
 		return;
 	}
 
+	// Don't support duplication for now.
+	if (evt->param.publish.dup_flag) {
+		return;
+	}
+
 	char buf[evt->param.publish.message.payload.len];
 	int  error = mqtt_read_publish_payload(client,
                                           buf,
