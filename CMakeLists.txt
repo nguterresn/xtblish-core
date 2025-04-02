@@ -20,7 +20,7 @@ if (NOT EXISTS ${CMAKE_SOURCE_DIR}/application/assem/node_modules)
   execute_process(COMMAND npm update WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/application/assem COMMAND_ERROR_IS_FATAL ANY)
 endif()
 
-include(wasm.cmake) # Include WASM related CMake variables.
+include(cmake/wasm.cmake) # Include WASM related CMake variables.
 
 set(WAMR_ROOT_DIR ${CMAKE_SOURCE_DIR}/libs/wasm-micro-runtime)
 include (${WAMR_ROOT_DIR}/build-scripts/runtime_lib.cmake)

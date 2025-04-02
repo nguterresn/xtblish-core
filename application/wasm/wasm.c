@@ -78,9 +78,9 @@ int wasm_init()
 		return -EPERM;
 	}
 
-	error = flash_area_open(FIXED_PARTITION_ID(storage_partition), &wasm_area);
+	error = flash_area_open(FIXED_PARTITION_ID(app0_partition), &wasm_area);
 	if (error < 0) {
-		printk("Error while opening flash partition 'storage_partition'");
+		printk("Error while opening flash partition 'app0_partition'");
 		return error;
 	}
 
