@@ -10,9 +10,7 @@
 
 K_MSGQ_DEFINE(appq, sizeof(struct appq), 5, 1); // len: 5
 
-extern uint8_t         wasm_file[WASM_FILE_MAX_SIZE * 4];
-
-static uint32_t                wasm_file_index = 0;
+static uint32_t wasm_file_index = 0;
 
 static int  app_handle_message(struct appq* data);
 static void app_http_download_callback(struct http_response* res,
@@ -58,14 +56,14 @@ static int app_handle_message(struct appq* data)
 
 	switch (data->id) {
 	case APP_FIRMWARE_AVAILABLE:
-		memset(wasm_file, 0, sizeof(wasm_file));
 		return http_get_from_local_server(data->url,
 		                                  app_http_download_callback);
 
-	case APP_FIRMWARE_BOOT:
-		error = wasm_load_app(wasm_file, wasm_file_index);
+	case APP_FIRMWARE_DOWNLOADED:
+		return wasm_verify_and_copy(data->app1_write_len);
+	case APP_FIRMWARE_VERIFIED:
+		error = wasm_replace();
 		printk("Done. Error: %d\n", error);
-		wasm_file_index = 0;
 		return error;
 	}
 
@@ -83,13 +81,19 @@ static void app_http_download_callback(struct http_response* res,
 		return;
 	}
 
-	memcpy(wasm_file + wasm_file_index,
-	       res->body_frag_start,
-	       res->body_frag_len);
-	wasm_file_index += res->body_frag_len;
+	int result = wasm_write_app1(res->body_frag_start,
+	                             res->body_frag_len,
+	                             final_data == HTTP_DATA_FINAL);
+	if (result < 0) {
+		printk("Failed to write to app1 for %d len %d\n",
+		       result,
+		       (int)res->body_frag_len);
+		return;
+	}
 
 	if (final_data == HTTP_DATA_FINAL) {
-		struct appq data = { .id = APP_FIRMWARE_BOOT };
+		struct appq data = { .id             = APP_FIRMWARE_DOWNLOADED,
+			                 .app1_write_len = result };
 		app_send(&data);
 	}
 }

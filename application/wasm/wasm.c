@@ -9,6 +9,12 @@
 #include <stdio.h>
 #include "bindings.h"
 
+#if defined(CONFIG_SOC_ESP32S3)
+#include <spi_flash_mmap.h>
+#else
+#error "Memory mapping is not yet supported for other socs!"
+#endif
+
 struct wasm_file {
 	uint8_t  hash[32];
 	uint8_t  data[512];
@@ -43,20 +49,19 @@ static RuntimeInitArgs runtime_args = {
   .gc_heap_size = 0
 };
 
-// Storage partition has size of 0x6000, thus 6144 words.
-__aligned(4) uint8_t wasm_file[WASM_FILE_MAX_SIZE * 4] = { 0 };
-
 extern struct sys_heap         _system_heap;
 static struct sys_memory_stats stats;
 static const uint32_t          stack_size = 4096;
 static const uint32_t          heap_size  = 0;
+static uint32_t                app1_off   = 0;
 
 static wasm_module_t      module      = NULL;
 static wasm_module_inst_t module_inst = NULL;
 static wasm_exec_env_t    exec_env    = NULL;
 
-static const struct flash_area* wasm_area = NULL;
-static int                      wasm_boot_app();
+static const struct flash_area* app0_wasm_area = NULL;
+static const struct flash_area* app1_wasm_area = NULL;
+static int                      wasm_boot();
 
 int wasm_init()
 {
@@ -78,39 +83,33 @@ int wasm_init()
 		return -EPERM;
 	}
 
-	error = flash_area_open(FIXED_PARTITION_ID(app0_partition), &wasm_area);
+	error = flash_area_open(FIXED_PARTITION_ID(app0_partition),
+	                        &app0_wasm_area);
 	if (error < 0) {
 		printk("Error while opening flash partition 'app0_partition'");
 		return error;
 	}
 
-	printk("Part offset 0x%08x part size %u\n",
-	       (uint32_t)wasm_area->fa_off,
-	       (uint32_t)wasm_area->fa_size);
+	error = flash_area_open(FIXED_PARTITION_ID(app1_partition),
+	                        &app1_wasm_area);
+	if (error < 0) {
+		printk("Error while opening flash partition 'app1_partition'");
+		return error;
+	}
+
+	printk("app0_wasm_area off: 0x%08x size: %u\napp1_wasm_area off: 0x%08x "
+	       "size: %u\n",
+	       (uint32_t)app0_wasm_area->fa_off,
+	       (uint32_t)app0_wasm_area->fa_size,
+	       (uint32_t)app1_wasm_area->fa_off,
+	       (uint32_t)app1_wasm_area->fa_size);
 
 	return 0;
 }
 
-int wasm_load_app(uint8_t* src, uint32_t len)
+int wasm_replace(void)
 {
-	int error = 0;
-
-	if (len >= (WASM_FILE_MAX_SIZE * 4)) {
-		return -ENOMEM;
-	}
-
-	error = flash_area_erase(wasm_area, 0, WASM_FILE_MAX_SIZE * 4);
-	if (error < 0) {
-		printk("Failed to erase the flash! [%d]\n", error);
-		return error;
-	}
-
-	error = flash_area_write(wasm_area, 0, src, len);
-	if (error < 0) {
-		printk("Failed to write new app onto the flash! [%d]\n", error);
-		return error;
-	}
-
+	// Note: this takes some time to execute.
 	if (exec_env) {
 		wasm_runtime_destroy_exec_env(exec_env);
 	}
@@ -121,21 +120,109 @@ int wasm_load_app(uint8_t* src, uint32_t len)
 		wasm_runtime_unload(module);
 	}
 
-	return wasm_boot_app();
+	return wasm_boot();
 }
 
-static int wasm_boot_app()
+int wasm_write_app1(uint8_t* src, uint32_t len, bool last)
 {
-	char error_buf[128] = { 0 };
-	int  error          = 0;
+	printk("off: %u app1_off: %u Writing to -> %u\n\n",
+	       (uint32_t)app1_wasm_area->fa_off,
+	       app1_off,
+	       (uint32_t)(app1_wasm_area->fa_off + app1_off));
 
-	error = flash_area_read(wasm_area, 0, wasm_file, wasm_area->fa_size);
+	int error = flash_area_write(app1_wasm_area, app1_off, src, len);
 	if (error) {
-		printk("Error while reading the partition. %d \n", error);
+		return error;
+	}
+	app1_off += len;
+
+	if (last) {
+		uint32_t temp_app1_off = app1_off;
+		app1_off               = 0;
+		return temp_app1_off;
+	}
+
+	return 0;
+}
+
+int wasm_verify_and_copy(uint32_t app1_write_len)
+{
+	// Verify the contens of app1, e.g. signature.
+	int error = 0;
+
+#if defined(CONFIG_SOC_ESP32S3)
+	const void*             app1_wasm_area_ptr = NULL;
+	spi_flash_mmap_handle_t handle;
+	error = spi_flash_mmap(app1_wasm_area->fa_off,
+	                       app1_wasm_area->fa_size,
+	                       SPI_FLASH_MMAP_DATA,
+	                       &app1_wasm_area_ptr,
+	                       &handle);
+	printk("memory-mapped pointer address: %p error=%d",
+	       app1_wasm_area_ptr,
+	       error);
+	if (error) {
+		return error;
+	}
+#else
+	return -ENOTSUP;
+#endif
+
+	// Not sure this erases by section. Check that later.
+	error = flash_area_erase(app0_wasm_area, 0, app1_write_len);
+	if (error) {
+		printk("Failed to erase %d byted from app0 error=%d\n",
+		       app1_write_len,
+		       error);
 		return error;
 	}
 
-	struct wasm_file* file = (struct wasm_file*)wasm_file;
+	// Write app1 -> app0
+	error = flash_area_write(app0_wasm_area,
+	                         0,
+	                         app1_wasm_area_ptr,
+	                         app1_write_len);
+	if (error) {
+		printk("Failed to write %d byted to app0 error=%d\n",
+		       app1_write_len,
+		       error);
+		return error;
+	}
+
+	error = flash_area_erase(app1_wasm_area, 0, app1_write_len);
+	if (error) {
+		printk("Failed to erase %d byted from app1 error=%d\n",
+		       app1_write_len,
+		       error);
+		return error;
+	}
+
+	return 0;
+}
+
+static int wasm_boot()
+{
+	char        error_buf[128] = { 0 };
+	int         error          = 0;
+	const void* mem_ptr        = NULL;
+
+#if defined(CONFIG_SOC_ESP32S3)
+	const void*             app0_wasm_area_ptr = NULL;
+	spi_flash_mmap_handle_t handle;
+	error = spi_flash_mmap(app0_wasm_area->fa_off,
+	                       app0_wasm_area->fa_size,
+	                       SPI_FLASH_MMAP_DATA,
+	                       &app0_wasm_area_ptr,
+	                       &handle);
+	printk("memory-mapped pointer address: %p", app0_wasm_area_ptr);
+	if (error) {
+		return error;
+	}
+#else
+	return -ENOTSUP;
+#endif
+
+	struct wasm_file* file = (struct wasm_file*)mem_ptr;
 
 	printk("[WASM file] size: %u prefix: %u version: %u\n",
 	       file->size,
@@ -153,6 +240,12 @@ static int wasm_boot_app()
 		       file->size);
 		return -EPERM;
 	}
+
+#if defined(CONFIG_SOC_ESP32S3)
+	spi_flash_munmap(handle);
+#else
+	return -ENOTSUP;
+#endif
 
 	/* create an instance of the WASM module (WASM linear memory is ready) */
 	module_inst = wasm_runtime_instantiate(module,

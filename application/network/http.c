@@ -17,15 +17,10 @@
 
 static void http_response_cb(struct http_response* res,
                              enum http_final_call final_data, void* user_data);
-static int  http_get_from_query(const char* hostname, const char* query,
-                                http_res_handle_cb callback);
 
-static uint8_t recv_buf[512] = { 0 };
-
+static uint8_t recv_buf[2048] = { 0 }; // Does this limit the http chunk size?
 static struct k_sem   http_sem;
 static struct dns_ctx dns_ctx = { 0 };
-
-extern struct k_sem new_ip;
 
 int http_init()
 {
@@ -65,6 +60,12 @@ int http_get_from_local_server(const char* query, http_res_handle_cb callback)
 
 	http_init_request(&req, HTTP_GET, SERVER_IP, query);
 
+	// error = dns_resolve_ipv4(hostname, &dns_ctx);
+	// if (error) {
+	// 	printk("Failed to resolve DNS %d\n", error);
+	// 	return error;
+	// }
+
 	error = socket_connect(&socket,
 	                       SOCK_STREAM,
 	                       IPPROTO_TCP,
@@ -91,63 +92,13 @@ close_socket:
 	return error;
 }
 
-static int http_get_from_query(const char* hostname, const char* query,
-                               http_res_handle_cb callback)
-{
-	int                 error  = 0;
-	int                 socket = -1;
-	struct http_request req    = { 0 };
-
-	http_init_request(&req, HTTP_GET, hostname, query);
-
-	error = dns_resolve_ipv4(hostname, &dns_ctx);
-	if (error) {
-		printk("Failed to resolve DNS %d\n", error);
-		return error;
-	}
-
-	error = socket_connect(&socket,
-	                       SOCK_STREAM,
-	                       IPPROTO_TCP,
-	                       (struct sockaddr_in*)&dns_ctx.info.ai_addr,
-	                       SERVER_HTTP_PORT);
-	if (error < 0) {
-		return error;
-	}
-
-	error = http_client_req(socket, &req, SERVER_HTTP_TIMEOUT, callback);
-	if (error < 0) {
-		printk("Failed to perform an HTTP request! error %d\n", error);
-		goto close_socket;
-	}
-
-	if (k_sem_take(&http_sem, K_MSEC(SERVER_HTTP_TIMEOUT)) < 0) {
-		error = -ENOLCK;
-		printk("Failed to get a HTTP response!\n");
-		goto close_socket;
-	}
-
-close_socket:
-	zsock_close(socket);
-	return error;
-}
-
 static void http_response_cb(struct http_response* res,
                              enum http_final_call final_data, void* user_data)
 {
-	if (final_data == HTTP_DATA_MORE) {
-		// printk("** HTTP_DATA_MORE ** (%u bytes)\n\n", (uint32_t)res->data_len);
-	}
-	else if (final_data == HTTP_DATA_FINAL) {
-		printk("** HTTP_DATA_FINAL ** (%u bytes)\n\n", (uint32_t)res->data_len);
-	}
-
 	http_res_handle_cb callback = user_data;
-	if (!callback) {
-		printk("No callback attached to the response!\n");
-		return;
+	if (callback) {
+		callback(res, final_data);
 	}
 
-	callback(res, final_data);
 	k_sem_give(&http_sem);
 }
