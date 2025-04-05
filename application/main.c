@@ -38,11 +38,15 @@ extern struct k_sem new_ip;
 
 int main(void)
 {
-	int error = 0;
+	int length = 0;
 
 	uint8_t euid[64] = { 0 };
-	error            = hwinfo_get_device_id(euid, sizeof(euid));
-	printk("[%d] DEVICE UID: ** %s **\n\n", error, euid);
+	length           = hwinfo_get_device_id(euid, sizeof(euid));
+	printk("DEVICE UID: \n");
+	for (uint8_t index = 0; index < length; index++) {
+		printk("[%d]", euid[index]);
+	}
+	printk("\n\n");
 
 	__ASSERT(wifi_init() == 0, "WiFi has failed to initialized\n");
 	__ASSERT(http_init() == 0, "HTTP has failed to initialized\n");
