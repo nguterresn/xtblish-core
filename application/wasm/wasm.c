@@ -1,5 +1,4 @@
 #include "wasm.h"
-#include "utils/flash_util.h"
 #include "wasm_export.h"
 #include <stdbool.h>
 #include <sys/_stdint.h>
@@ -125,23 +124,17 @@ int wasm_replace(void)
 }
 
 int wasm_write_app1(uint8_t* src, uint32_t len, uint32_t sector_offset,
-                    uint32_t sector_len, bool force)
+                    bool force)
 {
 	int      error  = 0;
-	uint32_t offset = sector_offset * sector_len;
+	uint32_t offset = sector_offset * len;
 
-	if (!force) {
-		__ASSERT(len == sector_len,
-		         "Length is not equal to sector_len: %d\n",
-		         len);
-	}
-
-	error = flash_area_erase(app1_wasm_area, offset, sector_len);
+	error = flash_area_erase(app1_wasm_area, offset, len);
 	if (error) {
 		printk("[%s] Failed to erase 'app1_wasm_area' offset: 0x%02x len: %d\n",
 		       __func__,
 		       offset,
-		       sector_len);
+		       len);
 		return error;
 	}
 

@@ -3,7 +3,7 @@
 #include "http.h"
 #include "wasm/wasm.h"
 #include "zephyr/sys/printk.h"
-#include "utils/flash_util.h"
+#include "storage/flash.h"
 
 static void       app_http_download_callback(struct http_response* res,
                                              enum http_final_call  final_data);

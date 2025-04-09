@@ -1,4 +1,4 @@
-#include "flash_util.h"
+#include "flash.h"
 #include <string.h>
 #include <zephyr/sys/__assert.h>
 #include "zephyr/sys/printk.h"
@@ -9,7 +9,7 @@ static void flash_util_buffer(struct flash_util* ctx, const uint8_t* src,
                               uint32_t len);
 
 void flash_util_init(struct flash_util* ctx,
-                     int (*write)(uint8_t*, uint32_t, uint32_t, uint32_t, bool))
+                     int (*write)(uint8_t*, uint32_t, uint32_t, bool))
 {
 	ctx->pos             = 0;
 	ctx->sectors_written = 0;
