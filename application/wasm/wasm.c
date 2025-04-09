@@ -104,14 +104,13 @@ int wasm_replace(void)
 
 static int wasm_boot()
 {
-	char  error_buf[128] = { 0 };
-	int   error          = 0;
-	void* mem_ptr        = NULL;
+	char error_buf[128] = { 0 };
+	int  error          = 0;
 
-	error = flash_get_app0(&mem_ptr);
-	if (error) {
-		printk("Failed to get the app0 address: %d\n", error);
-		return error;
+	const void* mem_ptr = flash_get_app0();
+	if (mem_ptr == NULL) {
+		printk("Failed to get the app0 address\n");
+		return -ENOMEM;
 	}
 
 	struct wasm_file* file = (struct wasm_file*)mem_ptr;

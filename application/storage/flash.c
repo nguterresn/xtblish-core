@@ -2,6 +2,7 @@
 #include <string.h>
 #include "app.h"
 #include "app/appq.h"
+#include "errno.h"
 #include <zephyr/sys/__assert.h>
 #include <zephyr/sys/printk.h>
 #include <zephyr/storage/flash_map.h>
@@ -86,27 +87,11 @@ int flash_app1_to_app0(uint32_t sectors)
 	int      error         = 0;
 	uint32_t bytes_written = sectors * FLASH_SECTOR_LEN;
 
-#if defined(CONFIG_SOC_ESP32S3)
-	const void*             app1_wasm_area_ptr = NULL;
-	spi_flash_mmap_handle_t handle;
-	// Note: Not really sure about this. It is technically possible to access the
-	// memory from the CPU just by accessing the MMU cache. However, until I figure
-	// something that works across different architectures, I'd prefer to keep
-	// the memory address behind a function call.
-	error = spi_flash_mmap(app1_wasm_area->fa_off,
-	                       app1_wasm_area->fa_size,
-	                       SPI_FLASH_MMAP_DATA,
-	                       &app1_wasm_area_ptr,
-	                       &handle);
-	printk("memory-mapped pointer address: %p error=%d",
-	       app1_wasm_area_ptr,
-	       error);
-	if (error) {
-		return error;
+	const void* app1_wasm_area_ptr = flash_get_app1();
+	if (app1_wasm_area_ptr == NULL) {
+		printk("Failed to get app1 address\n");
+		return -ENOMEM;
 	}
-#else
-	return -ENOTSUP;
-#endif
 
 	// Not sure this erases by section. Check that later.
 	error = flash_area_erase(app0_wasm_area, 0, bytes_written);
@@ -129,38 +114,42 @@ int flash_app1_to_app0(uint32_t sectors)
 		return error;
 	}
 
+	flash_release_app1();
+
 	struct appq data = { .id = APP_FIRMWARE_VERIFIED, .app1_sectors = sectors };
 	app_send(&data);
 
 	return 0;
 }
 
-int flash_get_app0(void** app_ptr)
+const void* flash_get_app0(void)
 {
+	const void* app_ptr = NULL;
 #if defined(CONFIG_SOC_ESP32S3)
-	spi_flash_mmap_handle_t handle;
-	return spi_flash_mmap(app0_wasm_area->fa_off,
-	                      app0_wasm_area->fa_size,
-	                      SPI_FLASH_MMAP_DATA,
-	                      *app_ptr,
-	                      &handle);
+	int error = spi_flash_mmap(app0_wasm_area->fa_off,
+	                           app0_wasm_area->fa_size,
+	                           SPI_FLASH_MMAP_DATA,
+	                           &app_ptr,
+	                           &app0_handle);
 #else
-	return -ENOTSUP;
+	return NULL;
 #endif
+	return error ? NULL : app_ptr;
 }
 
-int flash_get_app1(void** app_ptr)
+const void* flash_get_app1(void)
 {
+	const void* app_ptr = NULL;
 #if defined(CONFIG_SOC_ESP32S3)
-	spi_flash_mmap_handle_t handle;
-	return spi_flash_mmap(app1_wasm_area->fa_off,
-	                      app1_wasm_area->fa_size,
-	                      SPI_FLASH_MMAP_DATA,
-	                      *app_ptr,
-	                      &handle);
+	int error = spi_flash_mmap(app1_wasm_area->fa_off,
+	                           app1_wasm_area->fa_size,
+	                           SPI_FLASH_MMAP_DATA,
+	                           &app_ptr,
+	                           &app1_handle);
 #else
-	return -ENOTSUP;
+	return NULL;
 #endif
+	return error ? NULL : app_ptr;
 }
 
 void flash_release_app0()
