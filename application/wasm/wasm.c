@@ -83,7 +83,7 @@ int wasm_init()
 		return -EPERM;
 	}
 
-	return flash_init();
+	return 0;
 }
 
 int wasm_replace(void)
@@ -131,8 +131,6 @@ static int wasm_boot()
 		       file->size);
 		return -EPERM;
 	}
-
-	flash_release_app0();
 
 	/* create an instance of the WASM module (WASM linear memory is ready) */
 	module_inst = wasm_runtime_instantiate(module,

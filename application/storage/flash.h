@@ -11,13 +11,10 @@ struct flash_ctx {
 	int (*write)(uint8_t*, uint32_t, uint32_t, bool);
 };
 
-int  flash_init(void);
-int  flash_app1_write(uint8_t* src, uint32_t len, uint32_t sectors, bool force);
-int  flash_app1_to_app0(uint32_t sectors);
-const void* flash_get_app0(void);
-const void* flash_get_app1(void);
-void flash_release_app0();
-void flash_release_app1();
+int flash_init(void);
+int flash_app1_write(uint8_t* src, uint32_t len, uint32_t sectors, bool force);
+int flash_app1_to_app0(uint32_t sectors);
+const void* flash_get_app0();
 
 void flash_context_init(struct flash_ctx* ctx,
                         int (*write)(uint8_t*, uint32_t, uint32_t, bool));

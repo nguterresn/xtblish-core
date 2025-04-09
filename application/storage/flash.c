@@ -9,8 +9,10 @@
 
 #if defined(CONFIG_SOC_ESP32S3)
 #include <spi_flash_mmap.h>
-static spi_flash_mmap_handle_t app0_handle;
-static spi_flash_mmap_handle_t app1_handle;
+static spi_flash_mmap_handle_t app0_handle = 0;
+static spi_flash_mmap_handle_t app1_handle = 0;
+const void*                    app0_mem    = NULL;
+const void*                    app1_mem    = NULL;
 #else
 #error "Memory mapping is not yet supported for other socs!"
 #endif
@@ -40,6 +42,26 @@ int flash_init(void)
 		printk("Error while opening flash partition 'app1_partition'");
 		return error;
 	}
+
+#if defined(CONFIG_SOC_ESP32S3)
+	error = spi_flash_mmap(app0_wasm_area->fa_off,
+	                       app0_wasm_area->fa_size,
+	                       SPI_FLASH_MMAP_DATA,
+	                       &app0_mem,
+	                       &app0_handle);
+	if (error) {
+		return error;
+	}
+
+	error = spi_flash_mmap(app1_wasm_area->fa_off,
+	                       app1_wasm_area->fa_size,
+	                       SPI_FLASH_MMAP_DATA,
+	                       &app1_mem,
+	                       &app1_handle);
+	if (error) {
+		return error;
+	}
+#endif
 
 	printk("app0_wasm_area off: 0x%08x size: %u\napp1_wasm_area off: 0x%08x "
 	       "size: %u\n",
@@ -87,8 +109,7 @@ int flash_app1_to_app0(uint32_t sectors)
 	int      error         = 0;
 	uint32_t bytes_written = sectors * FLASH_SECTOR_LEN;
 
-	const void* app1_wasm_area_ptr = flash_get_app1();
-	if (app1_wasm_area_ptr == NULL) {
+	if (app1_mem == NULL) {
 		printk("Failed to get app1 address\n");
 		return -ENOMEM;
 	}
@@ -103,10 +124,7 @@ int flash_app1_to_app0(uint32_t sectors)
 	}
 
 	// Write app1 -> app0
-	error = flash_area_write(app0_wasm_area,
-	                         0,
-	                         app1_wasm_area_ptr,
-	                         bytes_written);
+	error = flash_area_write(app0_wasm_area, 0, app1_mem, bytes_written);
 	if (error) {
 		printk("Failed to write %d byted to app0 error=%d\n",
 		       bytes_written,
@@ -114,60 +132,10 @@ int flash_app1_to_app0(uint32_t sectors)
 		return error;
 	}
 
-	flash_release_app1();
-
 	struct appq data = { .id = APP_FIRMWARE_VERIFIED, .app1_sectors = sectors };
 	app_send(&data);
 
 	return 0;
-}
-
-const void* flash_get_app0(void)
-{
-	const void* app_ptr = NULL;
-#if defined(CONFIG_SOC_ESP32S3)
-	int error = spi_flash_mmap(app0_wasm_area->fa_off,
-	                           app0_wasm_area->fa_size,
-	                           SPI_FLASH_MMAP_DATA,
-	                           &app_ptr,
-	                           &app0_handle);
-#else
-	return NULL;
-#endif
-	return error ? NULL : app_ptr;
-}
-
-const void* flash_get_app1(void)
-{
-	const void* app_ptr = NULL;
-#if defined(CONFIG_SOC_ESP32S3)
-	int error = spi_flash_mmap(app1_wasm_area->fa_off,
-	                           app1_wasm_area->fa_size,
-	                           SPI_FLASH_MMAP_DATA,
-	                           &app_ptr,
-	                           &app1_handle);
-#else
-	return NULL;
-#endif
-	return error ? NULL : app_ptr;
-}
-
-void flash_release_app0()
-{
-#if defined(CONFIG_SOC_ESP32S3)
-	spi_flash_munmap(app0_handle);
-#else
-	return -ENOTSUP;
-#endif
-}
-
-void flash_release_app1()
-{
-#if defined(CONFIG_SOC_ESP32S3)
-	spi_flash_munmap(app1_handle);
-#else
-	return -ENOTSUP;
-#endif
 }
 
 void flash_context_init(struct flash_ctx* ctx,
@@ -217,6 +185,11 @@ void flash_context_write(struct flash_ctx* ctx, const uint8_t* src,
 	       ctx->pos,
 	       ctx->sectors,
 	       flush);
+}
+
+const void* flash_get_app0()
+{
+	return app0_mem;
 }
 
 static void flash_context_buffer(struct flash_ctx* ctx, const uint8_t* src,

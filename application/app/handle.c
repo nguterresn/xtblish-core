@@ -19,6 +19,7 @@ void app_handle_firmware_available(struct appq* data)
 
 void app_handle_firmware_downloaded(struct appq* data)
 {
+	printk("app_handle_firmware_downloaded -->>>>\n");
 	int error = flash_app1_to_app0(data->app1_sectors);
 	printk("[%s] error=%d\n", __func__, error);
 }
