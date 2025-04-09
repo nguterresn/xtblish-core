@@ -26,15 +26,6 @@ static void mgmt_event_net_handler(struct net_mgmt_event_callback* event_wifi,
 static void mgmt_event_wifi_handler(struct net_mgmt_event_callback* event_wifi,
                                     uint32_t mgmt_event, struct net_if* iface);
 
-// void wifi_thread(void* arg1, void* arg2, void* arg3)
-// {
-// 	printk("Start 'wifi_thread'\n");
-
-// 	for (;;) {
-// 		k_sleep(K_SECONDS(1));
-// 	}
-// }
-
 int wifi_connect(void)
 {
 	struct net_if* iface = net_if_get_default();

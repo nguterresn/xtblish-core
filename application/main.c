@@ -40,11 +40,11 @@ int main(void)
 {
 	int length = 0;
 
-	uint8_t euid[64] = { 0 };
-	length           = hwinfo_get_device_id(euid, sizeof(euid));
+	uint8_t euid[8] = { 0 };
+	length          = hwinfo_get_device_id(euid, sizeof(euid));
 	printk("DEVICE UID: \n");
 	for (uint8_t index = 0; index < length; index++) {
-		printk("[%d]", euid[index]);
+		printk("[%02x]", euid[index]);
 	}
 	printk("\n\n");
 

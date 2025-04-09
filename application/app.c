@@ -8,9 +8,7 @@
 #include <zephyr/net/http/client.h>
 #include <zephyr/sys/printk.h>
 
-K_MSGQ_DEFINE(appq, sizeof(struct appq), 5, 1); // len: 5
-
-static uint32_t wasm_file_index = 0;
+K_MSGQ_DEFINE(appq, sizeof(struct appq), 3, 1); // len: 3
 
 static int  app_handle_message(struct appq* data);
 static void app_http_download_callback(struct http_response* res,
@@ -58,7 +56,6 @@ static int app_handle_message(struct appq* data)
 	case APP_FIRMWARE_AVAILABLE:
 		return http_get_from_local_server(data->url,
 		                                  app_http_download_callback);
-
 	case APP_FIRMWARE_DOWNLOADED:
 		return wasm_verify_and_copy(data->app1_write_len);
 	case APP_FIRMWARE_VERIFIED:
@@ -81,6 +78,12 @@ static void app_http_download_callback(struct http_response* res,
 		return;
 	}
 
+	uint32_t headers_len = res->data_len - res->body_frag_len;
+
+	if (headers_len > 0 || !res->body_frag_start) {
+		// There are headers.
+		printk("Response headers: \n%s\n\n", res->recv_buf);
+	}
 	int result = wasm_write_app1(res->body_frag_start,
 	                             res->body_frag_len,
 	                             final_data == HTTP_DATA_FINAL);
@@ -94,6 +97,6 @@ static void app_http_download_callback(struct http_response* res,
 	if (final_data == HTTP_DATA_FINAL) {
 		struct appq data = { .id             = APP_FIRMWARE_DOWNLOADED,
 			                 .app1_write_len = result };
-		app_send(&data);
+		// app_send(&data);
 	}
 }

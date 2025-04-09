@@ -125,15 +125,16 @@ int wasm_replace(void)
 
 int wasm_write_app1(uint8_t* src, uint32_t len, bool last)
 {
-	printk("off: %u app1_off: %u Writing to -> %u\n\n",
+	printk("off: %u len: %u app1_off: %u Writing to -> %u\n\n",
 	       (uint32_t)app1_wasm_area->fa_off,
+	       len,
 	       app1_off,
 	       (uint32_t)(app1_wasm_area->fa_off + app1_off));
 
-	int error = flash_area_write(app1_wasm_area, app1_off, src, len);
-	if (error) {
-		return error;
-	}
+	// int error = flash_area_write(app1_wasm_area, app1_off, src, len);
+	// if (error) {
+	// 	return error;
+	// }
 	app1_off += len;
 
 	if (last) {
@@ -153,6 +154,10 @@ int wasm_verify_and_copy(uint32_t app1_write_len)
 #if defined(CONFIG_SOC_ESP32S3)
 	const void*             app1_wasm_area_ptr = NULL;
 	spi_flash_mmap_handle_t handle;
+	// Note: Not really sure about this. It is technically possible to access the
+	// memory from the CPU just by accessing the MMU cache. However, until I figure
+	// something that works across different architectures, I'd prefer to keep
+	// the memory address behind a function call.
 	error = spi_flash_mmap(app1_wasm_area->fa_off,
 	                       app1_wasm_area->fa_size,
 	                       SPI_FLASH_MMAP_DATA,

@@ -15,10 +15,14 @@
 #include <zephyr/sys/__assert.h>
 #include <zephyr/sys/printk.h>
 
+// Note: Unsure about the size of this array. Keeping it as 4kB as most flash
+// sectors are erased by sector of 4kB.
+#define HTTP_BLOCK_SIZE 4096
+
 static void http_response_cb(struct http_response* res,
                              enum http_final_call final_data, void* user_data);
 
-static uint8_t recv_buf[2048] = { 0 }; // Does this limit the http chunk size?
+static uint8_t        recv_buf[HTTP_BLOCK_SIZE] = { 0 };
 static struct k_sem   http_sem;
 static struct dns_ctx dns_ctx = { 0 };
 
@@ -100,5 +104,7 @@ static void http_response_cb(struct http_response* res,
 		callback(res, final_data);
 	}
 
-	k_sem_give(&http_sem);
+	if (final_data == HTTP_DATA_FINAL) {
+		k_sem_give(&http_sem);
+	}
 }
