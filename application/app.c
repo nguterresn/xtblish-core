@@ -1,5 +1,5 @@
 #include "app.h"
-#include "appq.h"
+#include "app/handle.h"
 #include "wasm/wasm.h"
 #include "http.h"
 #include "stdio.h"
@@ -8,11 +8,9 @@
 #include <zephyr/net/http/client.h>
 #include <zephyr/sys/printk.h>
 
-K_MSGQ_DEFINE(appq, sizeof(struct appq), 3, 1); // len: 3
+K_MSGQ_DEFINE(appq, sizeof(struct appq), 5, 1); // len: 3
 
-static int  app_handle_message(struct appq* data);
-static void app_http_download_callback(struct http_response* res,
-                                       enum http_final_call  final_data);
+static void app_handle_message(struct appq* data);
 
 // (!) Important Note:
 // Due to the way the Wifi manages the heap, it should be correclty initialized
@@ -30,8 +28,7 @@ int app_send(struct appq* data)
 
 void app_thread(void* arg1, void* arg2, void* arg3)
 {
-	int         error = 0;
-	struct appq data  = { 0 };
+	struct appq data = { 0 };
 
 	printk("Start 'app_thread'\n");
 
@@ -39,64 +36,23 @@ void app_thread(void* arg1, void* arg2, void* arg3)
 
 	for (;;) {
 		if (k_msgq_get(&appq, &data, K_FOREVER) == 0) {
-			error = app_handle_message((struct appq*)&data);
-			if (error) {
-				// Handle this better in the future.
-				k_sleep(K_MSEC(3000));
-			}
+			app_handle_message((struct appq*)&data);
 		}
 	}
 }
 
-static int app_handle_message(struct appq* data)
+static void app_handle_message(struct appq* data)
 {
-	int error = 0;
-
 	switch (data->id) {
 	case APP_FIRMWARE_AVAILABLE:
-		return http_get_from_local_server(data->url,
-		                                  app_http_download_callback);
+		app_handle_firmware_available(data);
+		break;
 	case APP_FIRMWARE_DOWNLOADED:
-		return wasm_verify_and_copy(data->app1_write_len);
+		app_handle_firmware_downloaded(data);
+		break;
 	case APP_FIRMWARE_VERIFIED:
-		error = wasm_replace();
-		printk("Done. Error: %d\n", error);
-		return error;
-	}
-
-	return -EINVAL;
-}
-
-static void app_http_download_callback(struct http_response* res,
-                                       enum http_final_call  final_data)
-{
-	if (199 > res->http_status_code || res->http_status_code >= 300) {
-		return;
-	}
-
-	if (!res->body_found) {
-		return;
-	}
-
-	uint32_t headers_len = res->data_len - res->body_frag_len;
-
-	if (headers_len > 0 || !res->body_frag_start) {
-		// There are headers.
-		printk("Response headers: \n%s\n\n", res->recv_buf);
-	}
-	int result = wasm_write_app1(res->body_frag_start,
-	                             res->body_frag_len,
-	                             final_data == HTTP_DATA_FINAL);
-	if (result < 0) {
-		printk("Failed to write to app1 for %d len %d\n",
-		       result,
-		       (int)res->body_frag_len);
-		return;
-	}
-
-	if (final_data == HTTP_DATA_FINAL) {
-		struct appq data = { .id             = APP_FIRMWARE_DOWNLOADED,
-			                 .app1_write_len = result };
-		// app_send(&data);
+		app_handle_firmware_verified(data);
+		break;
 	}
 }
+

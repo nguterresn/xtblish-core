@@ -15,10 +15,6 @@
 #include <zephyr/sys/__assert.h>
 #include <zephyr/sys/printk.h>
 
-// Note: Unsure about the size of this array. Keeping it as 4kB as most flash
-// sectors are erased by sector of 4kB.
-#define HTTP_BLOCK_SIZE 4096
-
 static void http_response_cb(struct http_response* res,
                              enum http_final_call final_data, void* user_data);
 

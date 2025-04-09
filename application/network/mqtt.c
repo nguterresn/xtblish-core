@@ -8,7 +8,7 @@
 #include <zephyr/net/mqtt.h>
 #include <zephyr/posix/arpa/inet.h>
 #include "app.h"
-#include "appq.h"
+#include "app/appq.h"
 #include "server.h"
 
 /* Buffers for MQTT client. */

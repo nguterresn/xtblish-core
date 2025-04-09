@@ -1,4 +1,5 @@
 #include "wasm.h"
+#include "utils/flash_util.h"
 #include "wasm_export.h"
 #include <stdbool.h>
 #include <sys/_stdint.h>
@@ -8,6 +9,7 @@
 #include <zephyr/storage/flash_map.h>
 #include <stdio.h>
 #include "bindings.h"
+#include "zephyr/sys/__assert.h"
 
 #if defined(CONFIG_SOC_ESP32S3)
 #include <spi_flash_mmap.h>
@@ -53,7 +55,6 @@ extern struct sys_heap         _system_heap;
 static struct sys_memory_stats stats;
 static const uint32_t          stack_size = 4096;
 static const uint32_t          heap_size  = 0;
-static uint32_t                app1_off   = 0;
 
 static wasm_module_t      module      = NULL;
 static wasm_module_inst_t module_inst = NULL;
@@ -123,24 +124,35 @@ int wasm_replace(void)
 	return wasm_boot();
 }
 
-int wasm_write_app1(uint8_t* src, uint32_t len, bool last)
+int wasm_write_app1(uint8_t* src, uint32_t len, uint32_t sector_offset,
+                    uint32_t sector_len, bool force)
 {
-	printk("off: %u len: %u app1_off: %u Writing to -> %u\n\n",
-	       (uint32_t)app1_wasm_area->fa_off,
-	       len,
-	       app1_off,
-	       (uint32_t)(app1_wasm_area->fa_off + app1_off));
+	int      error  = 0;
+	uint32_t offset = sector_offset * sector_len;
 
-	// int error = flash_area_write(app1_wasm_area, app1_off, src, len);
-	// if (error) {
-	// 	return error;
-	// }
-	app1_off += len;
+	if (!force) {
+		__ASSERT(len == sector_len,
+		         "Length is not equal to sector_len: %d\n",
+		         len);
+	}
 
-	if (last) {
-		uint32_t temp_app1_off = app1_off;
-		app1_off               = 0;
-		return temp_app1_off;
+	error = flash_area_erase(app1_wasm_area, offset, sector_len);
+	if (error) {
+		printk("[%s] Failed to erase 'app1_wasm_area' offset: 0x%02x len: %d\n",
+		       __func__,
+		       offset,
+		       sector_len);
+		return error;
+	}
+
+	error = flash_area_write(app1_wasm_area, offset, src, len);
+	if (error) {
+		printk("[%s] Failed to write to 'app1_wasm_area' offset: 0x%02x len: "
+		       "%d\n",
+		       __func__,
+		       offset,
+		       len);
+		return error;
 	}
 
 	return 0;
