@@ -7,6 +7,7 @@
 #include "network/wifi.h"
 #include "network/http.h"
 #include "network/mqtt.h"
+#include "storage/flash.h"
 #include "zephyr/sys/printk.h"
 
 #define N_THREAD(thread, stack, func)             \
@@ -48,6 +49,7 @@ int main(void)
 	}
 	printk("\n\n");
 
+	__ASSERT(flash_init() == 0, "Flash has failed to initialized\n");
 	__ASSERT(wifi_init() == 0, "WiFi has failed to initialized\n");
 	__ASSERT(http_init() == 0, "HTTP has failed to initialized\n");
 	__ASSERT(mqtt_init() == 0, "MQTT has failed to initialized\n");

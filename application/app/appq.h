@@ -21,6 +21,6 @@ struct appq {
 
 	union {
 		char     url[96];
-		uint32_t app1_sectors_written;
+		uint32_t app1_sectors;
 	};
 };
