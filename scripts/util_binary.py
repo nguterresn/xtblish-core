@@ -1,10 +1,11 @@
 import argparse
 
-def strip_bin_file(input_bin: str, output_bin: str):
+def strip_bin_file(input_bin: str, output_bin: str, strip_len: str):
     prefix_size = 32 + 512 + 4
     with open(input_bin, "rb") as f:
         f.seek(prefix_size)
         data = f.read()
+        data = data[0:int(strip_len)]
 
     with open(output_bin, "wb") as f:
         f.write(data)
@@ -34,7 +35,7 @@ def main():
         description="Create a binary file with the length of a .wasm file as the first word."
     )
 
-    parser.add_argument("-s", "--strip", action="store_true", help="Strip binary")
+    parser.add_argument("-s", "--strip", help="Strip binary")
     parser.add_argument("-c", "--create", action="store_true", help="Create binary")
 
 
@@ -44,7 +45,7 @@ def main():
     args = parser.parse_args()
 
     if (args.strip):
-        strip_bin_file(args.input, args.output_bin)
+        strip_bin_file(args.input, args.output_bin, args.strip)
     if (args.create):
         create_bin_file_with_length(args.input, args.output_bin)
 
