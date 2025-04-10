@@ -13,6 +13,11 @@ enum appq_error {
 	ERROR_OTHER
 };
 
+struct appq_app1_flash {
+	uint32_t sectors;
+	uint32_t bytes_written;
+};
+
 struct appq {
 	union {
 		enum appq_msg   id;
@@ -20,7 +25,7 @@ struct appq {
 	};
 
 	union {
-		char     url[96];
-		uint32_t app1_sectors;
+		char                   url[96];
+		struct appq_app1_flash app1_flash;
 	};
 };

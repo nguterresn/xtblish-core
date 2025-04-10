@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include "bindings.h"
 #include "storage/flash.h"
+#include "wasm_runtime.h"
 
 #if defined(CONFIG_SOC_ESP32S3)
 #include <spi_flash_mmap.h>
@@ -120,6 +121,14 @@ static int wasm_boot()
 	       file->prefix,
 	       file->version);
 
+	printk("\n\n\n--- BEFORE LOADING --- \n\n\n");
+
+	sys_heap_runtime_stats_get(&_system_heap, &stats);
+
+	printk("INFO: Allocated Heap = %zu\n", stats.allocated_bytes);
+	printk("INFO: Free Heap = %zu\n", stats.free_bytes);
+	printk("INFO: Max Allocated Heap = %zu\n\n", stats.max_allocated_bytes);
+
 	// /* parse the WASM file from buffer and create a WASM module */
 	module = wasm_runtime_load((uint8_t*)&file->prefix,
 	                           file->size,
@@ -132,6 +141,14 @@ static int wasm_boot()
 		return -EPERM;
 	}
 
+	printk("\n\n\n--- AFTER LOADING --- \n\n\n");
+
+	sys_heap_runtime_stats_get(&_system_heap, &stats);
+
+	printk("INFO: Allocated Heap = %zu\n", stats.allocated_bytes);
+	printk("INFO: Free Heap = %zu\n", stats.free_bytes);
+	printk("INFO: Max Allocated Heap = %zu\n\n", stats.max_allocated_bytes);
+
 	/* create an instance of the WASM module (WASM linear memory is ready) */
 	module_inst = wasm_runtime_instantiate(module,
 	                                       0, // May be ignored.
@@ -142,6 +159,11 @@ static int wasm_boot()
 		printk("Failed to instantiate! Error: %s\n", error_buf);
 		return -EPERM;
 	}
+
+	struct WASMModuleInstance* mod_ins = (struct WASMModuleInstance*)
+	    module_inst;
+
+	printk("Number of functions exported: %d\n", mod_ins->export_func_count);
 
 	// The stack size is the amount of memory necessary to store
 	// the WASM binary operations, like i32.add 1 or i32.const 1
@@ -162,12 +184,6 @@ static int wasm_boot()
 		printk("Failed to call 'hello_world'\n");
 		return -EPERM;
 	}
-
-	sys_heap_runtime_stats_get(&_system_heap, &stats);
-
-	printk("\n\nINFO: Allocated Heap = %zu\n", stats.allocated_bytes);
-	printk("INFO: Free Heap = %zu\n", stats.free_bytes);
-	printk("INFO: Max Allocated Heap = %zu\n\n\n", stats.max_allocated_bytes);
 
 	return 0;
 }
