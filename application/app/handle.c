@@ -2,6 +2,7 @@
 #include "app.h"
 #include "http.h"
 #include "wasm/wasm.h"
+#include "zephyr/sys/__assert.h"
 #include "zephyr/sys/printk.h"
 #include "storage/flash.h"
 
@@ -11,7 +12,7 @@ static void             app_http_download_callback(struct http_response* res,
 
 void app_handle_firmware_available(struct appq* data)
 {
-	flash_context_init(&flash_ctx, flash_app1_write_sector_callback);
+	flash_util_init(&flash_ctx);
 	int error = http_get_from_local_server(data->url,
 	                                       app_http_download_callback);
 	printk("[%s] error=%d\n", __func__, error);
@@ -19,7 +20,7 @@ void app_handle_firmware_available(struct appq* data)
 
 void app_handle_firmware_downloaded(struct appq* data)
 {
-	int error = flash_app1_to_app0(&data->app1_flash);
+	int error = flash_app1_to_app0(data->bytes_written);
 	printk("[%s] error=%d\n", __func__, error);
 }
 
@@ -41,17 +42,18 @@ static void app_http_download_callback(struct http_response* res,
 		return;
 	}
 
-	flash_context_write(&flash_ctx,
-	                    res->body_frag_start,
-	                    res->body_frag_len,
-	                    final_data == HTTP_DATA_FINAL);
+	__ASSERT(flash_ctx.flush != NULL,
+	         "Flash util context is not initialized.\n");
+
+	flash_util_write(&flash_ctx,
+	                 res->body_frag_start,
+	                 res->body_frag_len,
+	                 final_data == HTTP_DATA_FINAL);
 
 	if (final_data == HTTP_DATA_FINAL) {
 		printk("Flashed %d bytes into app1\n", flash_ctx.bytes_written);
-		struct appq data = { .id         = APP_FIRMWARE_DOWNLOADED,
-			                 .app1_flash = {
-			                     .sectors       = flash_ctx.sectors,
-			                     .bytes_written = flash_ctx.bytes_written } };
+		struct appq data = { .id            = APP_FIRMWARE_DOWNLOADED,
+			                 .bytes_written = flash_ctx.bytes_written };
 		app_send(&data);
 	}
 }

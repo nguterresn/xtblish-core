@@ -14,7 +14,6 @@ enum appq_error {
 };
 
 struct appq_app1_flash {
-	uint32_t sectors;
 	uint32_t bytes_written;
 };
 
@@ -25,7 +24,7 @@ struct appq {
 	};
 
 	union {
-		char                   url[96];
-		struct appq_app1_flash app1_flash;
+		char     url[96];
+		uint32_t bytes_written;
 	};
 };

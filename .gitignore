@@ -6,5 +6,5 @@
 *xtblish*
 
 node_modules
-build
+*build
 cred.h

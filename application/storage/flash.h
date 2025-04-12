@@ -14,12 +14,9 @@ struct flash_ctx {
 };
 
 int         flash_init(void);
-int         flash_app1_write_sector_callback(uint8_t* src, uint32_t len,
-                                             uint32_t sector_offset);
-int         flash_app1_to_app0(struct appq_app1_flash* app1_flash);
+int         flash_app1_to_app0(uint32_t bytes_written);
 const void* flash_get_app0();
 
-void flash_context_init(struct flash_ctx* ctx,
-                        int (*write)(uint8_t*, uint32_t, uint32_t));
-void flash_context_write(struct flash_ctx* ctx, const uint8_t* src,
-                         uint32_t len, bool flush);
+void flash_util_init(struct flash_ctx* ctx);
+void flash_util_write(struct flash_ctx* ctx, const uint8_t* src, uint32_t len,
+                      bool flush);
