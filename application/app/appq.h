@@ -21,6 +21,6 @@ struct appq {
 
 	union {
 		char     url[96];
-		uint32_t sectors;
+		uint32_t bytes_to_write;
 	};
 };

@@ -20,9 +20,8 @@ const struct flash_area* app0_wasm_area = NULL;
 const struct flash_area* app1_wasm_area = NULL;
 
 static int  flash_app1_write_sector_callback(uint8_t* src, uint32_t len,
-                                             uint32_t unaligned_offset,
-                                             bool     pad);
-static void flash_util_flush(struct flash_ctx* ctx, bool pad);
+                                             uint32_t offset);
+static void flash_util_flush(struct flash_ctx* ctx);
 static void flash_util_copy(struct flash_ctx* ctx, const uint8_t* src,
                             uint32_t len);
 
@@ -76,10 +75,14 @@ int flash_init(void)
 	return 0;
 }
 
-int flash_app1_to_app0(uint32_t sectors)
+int flash_app1_to_app0(uint32_t bytes_to_write)
 {
 	int      error          = 0;
-	uint32_t bytes_to_write = sectors * FLASH_SECTOR_LEN;
+	uint32_t bytes_to_erase = bytes_to_write > FLASH_SECTOR_LEN
+	                              ? bytes_to_write +
+	                                    (FLASH_SECTOR_LEN -
+	                                     bytes_to_write % FLASH_SECTOR_LEN)
+	                              : FLASH_SECTOR_LEN;
 
 	if (app1_mem == NULL) {
 		printk("Failed to get app1 address\n");
@@ -87,13 +90,13 @@ int flash_app1_to_app0(uint32_t sectors)
 	}
 
 	printk("Sectors to erase on app0: %d bytes: %d.\n",
-	       bytes_to_write / FLASH_SECTOR_LEN,
-	       bytes_to_write);
+	       bytes_to_erase / FLASH_SECTOR_LEN,
+	       bytes_to_erase);
 
-	error = flash_area_erase(app0_wasm_area, 0, bytes_to_write);
+	error = flash_area_erase(app0_wasm_area, 0, bytes_to_erase);
 	if (error) {
-		printk("Failed to erase %d byted from app0 error=%d\n",
-		       bytes_to_write,
+		printk("Failed to erase %d bytes from app0 error=%d\n",
+		       bytes_to_erase,
 		       error);
 		return error;
 	}
@@ -129,8 +132,11 @@ const void* flash_get_app0()
  * @return int
  */
 static int flash_app1_write_sector_callback(uint8_t* src, uint32_t len,
-                                            uint32_t offset, bool pad)
+                                            uint32_t offset)
 {
+	__ASSERT(offset % FLASH_SECTOR_LEN == 0,
+	         "Offset mod != FLASH_SECTOR_LEN: %d\n",
+	         offset);
 	int error = 0;
 
 	error = flash_area_erase(app1_wasm_area, offset, FLASH_SECTOR_LEN);
@@ -158,19 +164,6 @@ static int flash_app1_write_sector_callback(uint8_t* src, uint32_t len,
 	       FLASH_SECTOR_LEN,
 	       len);
 
-	if (pad && (FLASH_SECTOR_LEN > len)) {
-		uint8_t pad[FLASH_SECTOR_LEN - len];
-		memset(pad, 0, FLASH_SECTOR_LEN - len);
-
-		error = flash_area_write(app1_wasm_area,
-		                         offset + len,
-		                         pad,
-		                         FLASH_SECTOR_LEN - len);
-		if (error) {
-			return error;
-		}
-	}
-
 	return 0;
 }
 
@@ -183,7 +176,7 @@ void flash_util_init(struct flash_ctx* ctx)
 }
 
 void flash_util_write(struct flash_ctx* ctx, const uint8_t* src, uint32_t len,
-                      bool pad)
+                      bool last)
 {
 	__ASSERT(ctx->pos <= FLASH_SECTOR_LEN,
 	         "Current flash util position is bigger than permitted: %d\n",
@@ -197,7 +190,7 @@ void flash_util_write(struct flash_ctx* ctx, const uint8_t* src, uint32_t len,
 		__ASSERT(ctx->pos == FLASH_SECTOR_LEN,
 		         "Flash pos is not equal to FLASH_SECTOR_LEN: %d\n",
 		         ctx->pos);
-		flash_util_flush(ctx, pad);
+		flash_util_flush(ctx);
 
 		if (len > available_space) {
 			// Buffer the remaining part.
@@ -209,8 +202,8 @@ void flash_util_write(struct flash_ctx* ctx, const uint8_t* src, uint32_t len,
 		flash_util_copy(ctx, src, len);
 	}
 
-	if (pad) {
-		flash_util_flush(ctx, pad);
+	if (last) {
+		flash_util_flush(ctx);
 	}
 }
 
@@ -225,9 +218,9 @@ static void flash_util_copy(struct flash_ctx* ctx, const uint8_t* src,
 	ctx->pos += len;
 }
 
-static void flash_util_flush(struct flash_ctx* ctx, bool pad)
+static void flash_util_flush(struct flash_ctx* ctx)
 {
-	ctx->flush(ctx->buffer, ctx->pos, ctx->bytes_written, pad);
+	ctx->flush(ctx->buffer, ctx->pos, ctx->bytes_written);
 	ctx->bytes_written += ctx->pos;
 
 	ctx->pos = 0;

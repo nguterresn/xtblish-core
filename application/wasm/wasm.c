@@ -49,9 +49,7 @@ static RuntimeInitArgs runtime_args = {
   .gc_heap_size = 0
 };
 
-extern struct sys_heap          _system_heap;
-extern const struct flash_area* app0_wasm_area;
-extern const struct flash_area* app1_wasm_area;
+extern struct sys_heap _system_heap;
 
 static struct sys_memory_stats stats;
 static const uint32_t          stack_size = 4096;
