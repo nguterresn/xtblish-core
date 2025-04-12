@@ -20,7 +20,7 @@ void app_handle_firmware_available(struct appq* data)
 
 void app_handle_firmware_downloaded(struct appq* data)
 {
-	int error = flash_app1_to_app0(data->bytes_written);
+	int error = flash_app1_to_app0(data->sectors);
 	printk("[%s] error=%d\n", __func__, error);
 }
 
@@ -51,9 +51,10 @@ static void app_http_download_callback(struct http_response* res,
 	                 final_data == HTTP_DATA_FINAL);
 
 	if (final_data == HTTP_DATA_FINAL) {
-		printk("Flashed %d bytes into app1\n", flash_ctx.bytes_written);
-		struct appq data = { .id            = APP_FIRMWARE_DOWNLOADED,
-			                 .bytes_written = flash_ctx.bytes_written };
+		struct appq data = {
+			.id      = APP_FIRMWARE_DOWNLOADED,
+			.sectors = flash_ctx.bytes_written / FLASH_SECTOR_LEN + 1
+		};
 		app_send(&data);
 	}
 }

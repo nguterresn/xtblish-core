@@ -19,13 +19,12 @@ const void*                    app1_mem    = NULL;
 const struct flash_area* app0_wasm_area = NULL;
 const struct flash_area* app1_wasm_area = NULL;
 
-static int      flash_app1_write_sector_callback(uint8_t* src, uint32_t len,
-                                                 uint32_t unaligned_offset);
-static void     flash_util_flush(struct flash_ctx* ctx);
-static void     flash_util_copy(struct flash_ctx* ctx, const uint8_t* src,
-                                uint32_t len);
-static uint32_t flash_util_get_aligned_bytes_written(uint32_t unaligned_bytes,
-                                                     uint32_t aligned_to);
+static int  flash_app1_write_sector_callback(uint8_t* src, uint32_t len,
+                                             uint32_t unaligned_offset,
+                                             bool     pad);
+static void flash_util_flush(struct flash_ctx* ctx, bool pad);
+static void flash_util_copy(struct flash_ctx* ctx, const uint8_t* src,
+                            uint32_t len);
 
 //  Missing: mutex to protect `app1_mem` and `app0_mem`...
 
@@ -77,12 +76,10 @@ int flash_init(void)
 	return 0;
 }
 
-int flash_app1_to_app0(uint32_t bytes_written)
+int flash_app1_to_app0(uint32_t sectors)
 {
-	int error = 0;
-	uint32_t
-	    bytes_to_erase = flash_util_get_aligned_bytes_written(bytes_written,
-	                                                          FLASH_SECTOR_LEN);
+	int      error          = 0;
+	uint32_t bytes_to_write = sectors * FLASH_SECTOR_LEN;
 
 	if (app1_mem == NULL) {
 		printk("Failed to get app1 address\n");
@@ -90,22 +87,24 @@ int flash_app1_to_app0(uint32_t bytes_written)
 	}
 
 	printk("Sectors to erase on app0: %d bytes: %d.\n",
-	       bytes_to_erase / FLASH_SECTOR_LEN,
-	       bytes_to_erase);
+	       bytes_to_write / FLASH_SECTOR_LEN,
+	       bytes_to_write);
 
-	error = flash_area_erase(app0_wasm_area, 0, bytes_to_erase);
+	error = flash_area_erase(app0_wasm_area, 0, bytes_to_write);
 	if (error) {
 		printk("Failed to erase %d byted from app0 error=%d\n",
-		       bytes_to_erase,
+		       bytes_to_write,
 		       error);
 		return error;
 	}
 
+	printk("Bytes to write to app0: %d bytes.\n", bytes_to_write);
+
 	// Write app1 -> app0
-	error = flash_area_write(app0_wasm_area, 0, app1_mem, bytes_written);
+	error = flash_area_write(app0_wasm_area, 0, app1_mem, bytes_to_write);
 	if (error) {
 		printk("Failed to write %d byted to app0 error=%d\n",
-		       bytes_written,
+		       bytes_to_write,
 		       error);
 		return error;
 	}
@@ -130,7 +129,7 @@ const void* flash_get_app0()
  * @return int
  */
 static int flash_app1_write_sector_callback(uint8_t* src, uint32_t len,
-                                            uint32_t offset)
+                                            uint32_t offset, bool pad)
 {
 	int error = 0;
 
@@ -159,6 +158,19 @@ static int flash_app1_write_sector_callback(uint8_t* src, uint32_t len,
 	       FLASH_SECTOR_LEN,
 	       len);
 
+	if (pad && (FLASH_SECTOR_LEN > len)) {
+		uint8_t pad[FLASH_SECTOR_LEN - len];
+		memset(pad, 0, FLASH_SECTOR_LEN - len);
+
+		error = flash_area_write(app1_wasm_area,
+		                         offset + len,
+		                         pad,
+		                         FLASH_SECTOR_LEN - len);
+		if (error) {
+			return error;
+		}
+	}
+
 	return 0;
 }
 
@@ -171,7 +183,7 @@ void flash_util_init(struct flash_ctx* ctx)
 }
 
 void flash_util_write(struct flash_ctx* ctx, const uint8_t* src, uint32_t len,
-                      bool flush)
+                      bool pad)
 {
 	__ASSERT(ctx->pos <= FLASH_SECTOR_LEN,
 	         "Current flash util position is bigger than permitted: %d\n",
@@ -185,7 +197,7 @@ void flash_util_write(struct flash_ctx* ctx, const uint8_t* src, uint32_t len,
 		__ASSERT(ctx->pos == FLASH_SECTOR_LEN,
 		         "Flash pos is not equal to FLASH_SECTOR_LEN: %d\n",
 		         ctx->pos);
-		flash_util_flush(ctx);
+		flash_util_flush(ctx, pad);
 
 		if (len > available_space) {
 			// Buffer the remaining part.
@@ -197,8 +209,8 @@ void flash_util_write(struct flash_ctx* ctx, const uint8_t* src, uint32_t len,
 		flash_util_copy(ctx, src, len);
 	}
 
-	if (flush) {
-		flash_util_flush(ctx);
+	if (pad) {
+		flash_util_flush(ctx, pad);
 	}
 }
 
@@ -213,19 +225,11 @@ static void flash_util_copy(struct flash_ctx* ctx, const uint8_t* src,
 	ctx->pos += len;
 }
 
-static void flash_util_flush(struct flash_ctx* ctx)
+static void flash_util_flush(struct flash_ctx* ctx, bool pad)
 {
-	ctx->flush(ctx->buffer, ctx->pos, ctx->bytes_written);
+	ctx->flush(ctx->buffer, ctx->pos, ctx->bytes_written, pad);
 	ctx->bytes_written += ctx->pos;
 
 	ctx->pos = 0;
 	memset(ctx->buffer, 0, sizeof(ctx->buffer));
-}
-
-static uint32_t flash_util_get_aligned_bytes_written(uint32_t unaligned_bytes,
-                                                     uint32_t aligned_to)
-{
-	return unaligned_bytes
-	           ? unaligned_bytes + (aligned_to - unaligned_bytes % aligned_to)
-	           : aligned_to;
 }
