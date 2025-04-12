@@ -19,7 +19,7 @@
       "types": "./build/release.d.ts"
     }
   },
-  "devDependencies": {
-    "xtblish-client": "^1.0.14"
+  "dependencies": {
+    "xtblish-client": "^1.0.19"
   }
 }

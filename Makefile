@@ -29,7 +29,7 @@ dump-app0:
 		# xxd dump_app0.bin | less
 
 dump-wasm0:
-		/Users/nunonogueira/Projectos/zephyr-projects/wasm-zephyr-ota/.venv/bin/python3.13 /Users/nunonogueira/Projectos/zephyr-projects/modules/hal/espressif/tools/esptool_py/esptool.py --chip auto --baud 921600 read_flash 0x210224 0x3814 dump_wasm0.wasm
+		/Users/nunonogueira/Projectos/zephyr-projects/wasm-zephyr-ota/.venv/bin/python3.13 /Users/nunonogueira/Projectos/zephyr-projects/modules/hal/espressif/tools/esptool_py/esptool.py --chip auto --baud 921600 read_flash 0x210224 0x6000 dump_wasm0.wasm
 
 dump-app1:
 		/Users/nunonogueira/Projectos/zephyr-projects/wasm-zephyr-ota/.venv/bin/python3.13 /Users/nunonogueira/Projectos/zephyr-projects/modules/hal/espressif/tools/esptool_py/esptool.py --chip auto --baud 921600 read_flash 0x410000 0x6000 dump_app1.bin
