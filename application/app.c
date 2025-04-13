@@ -30,7 +30,7 @@ void app_thread(void* arg1, void* arg2, void* arg3)
 {
 	struct appq data = { 0 };
 
-	printk("Start 'app_thread'\n");
+	printk("Start 'app_thread from OTA'\n");
 
 	/// ------ ///
 
