@@ -131,7 +131,17 @@ static int mqtt_setup(void)
 		return error;
 	}
 
-	return mqtt_sub("app/124");
+	error = mqtt_sub("app/124");
+	if (error < 0) {
+		return error;
+	}
+
+	error = mqtt_sub("image");
+	if (error < 0) {
+		return error;
+	}
+
+	return 0;
 }
 
 static void mqtt_broker_init(void)

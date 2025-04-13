@@ -25,8 +25,10 @@ ram_report:
 rom_report:
 	west build -b esp32s3_devkitc/esp32s3/procpu -t rom_report > rom_report.txt
 
-flash: zephyr
+sign: zephyr
 	python3 ../bootloader/mcuboot/scripts/imgtool.py create --version $(IMAGE_0_VERSION) --align 4 --header-size 32 --slot-size $(IMAGE_0_SLOT_SIZE) build/zephyr/zephyr.bin dist/unsigned-image0.bin
+
+flash: sign
 	python3 /Users/nunonogueira/Projectos/zephyr-projects/modules/hal/espressif/tools/esptool_py/esptool.py -p /dev/cu.wchusbserial58FC0505471 --baud 921600 --before default_reset --after hard_reset write_flash -u --flash_mode dio --flash_freq 40m --flash_size detect $(IMAGE_0_OFFSET) dist/unsigned-image0.bin
 
 erase-image0:
@@ -53,5 +55,5 @@ ocd:
 clean:
 	rm -rf build
 
-.PHONY: build config clean run zephyr flash menuconfig rom_report ram_report
+.PHONY: build config clean run zephyr sign flash menuconfig rom_report ram_report
 

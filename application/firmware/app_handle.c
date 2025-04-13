@@ -12,7 +12,7 @@ static void             app_http_download_callback(struct http_response* res,
 
 void app_handle_firmware_available(struct appq* data)
 {
-	flash_util_init(&flash_ctx);
+	flash_util_init(&flash_ctx, flash_write_app1_sector_callback);
 	int error = http_get_from_local_server(data->url,
 	                                       app_http_download_callback);
 	printk("[%s] error=%d\n", __func__, error);

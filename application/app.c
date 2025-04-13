@@ -56,6 +56,9 @@ static void app_handle_message(struct appq* data)
 	case IMAGE_AVAILABLE:
 		image_handle_firmware_available(data);
 		break;
+	case IMAGE_DOWNLOADED:
+		image_handle_firmware_downloaded(data);
+		break;
 	}
 }
 
