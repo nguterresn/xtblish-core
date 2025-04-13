@@ -40,10 +40,6 @@ static void mqtt_evt_handler(struct mqtt_client*    client,
                              const struct mqtt_evt* evt);
 static void mqtt_publish_handler(struct mqtt_client*    client,
                                  const struct mqtt_evt* evt);
-static void mqtt_handle_app_topic(struct appq* data, enum appq_msg id,
-                                  struct mqtt_topic_app_image* topic_app);
-static void mqtt_handle_image_topic(struct appq* data, enum appq_msg id,
-                                    struct mqtt_topic_app_image* topic_app);
 
 int mqtt_init()
 {
@@ -131,6 +127,7 @@ static int mqtt_setup(void)
 		return error;
 	}
 
+	// TODO: replace '124' with device's id.
 	error = mqtt_sub("app/124");
 	if (error < 0) {
 		return error;
@@ -313,29 +310,18 @@ static void mqtt_publish_handler(struct mqtt_client*    client,
 	}
 
 	if (strstr(evt->param.publish.message.topic.topic.utf8, "app") != NULL) {
-		mqtt_handle_app_topic(&data, APP_AVAILABLE, &topic_app);
+		data.id = APP_AVAILABLE;
 	}
 	else if (strstr(evt->param.publish.message.topic.topic.utf8, "image") !=
 	         NULL) {
-		mqtt_handle_image_topic(&data, IMAGE_AVAILABLE, &topic_app);
+		data.id = IMAGE_AVAILABLE;
+	}
+	else {
+		return;
 	}
 
+	strcpy(data.url, topic_app.url);
+	app_send(&data);
+
 	printk("(mqtt_read_publish_payload) error=%d message='%s'\n\n", error, buf);
-}
-
-static void mqtt_handle_app_topic(struct appq* data, enum appq_msg id,
-                                  struct mqtt_topic_app_image* topic_app)
-{
-	data->id = id;
-	// Note: This copy may be redundant. Maybe pass struct appq instead of ?
-	strcpy(data->url, topic_app->url);
-	app_send(data);
-}
-
-static void mqtt_handle_image_topic(struct appq* data, enum appq_msg id,
-                                    struct mqtt_topic_app_image* topic_app)
-{
-	data->id = id;
-	strcpy(data->url, topic_app->url);
-	app_send(data);
 }
