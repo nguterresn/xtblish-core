@@ -127,7 +127,7 @@ static int mqtt_setup(void)
 		return error;
 	}
 
-	return mqtt_sub("firmware/124");
+	return mqtt_sub("app/124");
 }
 
 static void mqtt_broker_init(void)
@@ -302,4 +302,8 @@ static void mqtt_publish_handler(struct mqtt_client*    client,
 	app_send(&data);
 
 	printk("(mqtt_read_publish_payload) error=%d message='%s'\n\n", error, buf);
+}
+
+int mqtt_handle_app_firmware(const char* buf, uint32_t len) {
+
 }
