@@ -1,7 +1,5 @@
 #include "app.h"
 #include "app/handle.h"
-#include "wasm/wasm.h"
-#include "http.h"
 #include "stdio.h"
 #include <zephyr/kernel.h>
 #include <zephyr/data/json.h>
