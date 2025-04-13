@@ -1,4 +1,4 @@
-#include "handle.h"
+#include "app_handle.h"
 #include "app.h"
 #include "http.h"
 #include "wasm/wasm.h"
@@ -51,7 +51,7 @@ static void app_http_download_callback(struct http_response* res,
 	                 final_data == HTTP_DATA_FINAL);
 
 	if (final_data == HTTP_DATA_FINAL) {
-		struct appq data = { .id             = APP_FIRMWARE_DOWNLOADED,
+		struct appq data = { .id             = APP_DOWNLOADED,
 			                 .bytes_to_write = flash_ctx.bytes_written };
 		app_send(&data);
 	}

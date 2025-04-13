@@ -5,6 +5,7 @@
 #include <zephyr/sys/__assert.h>
 #include <zephyr/sys/printk.h>
 #include <zephyr/storage/flash_map.h>
+#include "firmware/appq.h"
 
 #if defined(CONFIG_SOC_ESP32S3)
 #include <spi_flash_mmap.h>
@@ -112,7 +113,7 @@ int flash_app1_to_app0(uint32_t bytes_to_write)
 		return error;
 	}
 
-	struct appq data = { .id = APP_FIRMWARE_VERIFIED };
+	struct appq data = { .id = APP_VERIFIED };
 	app_send(&data);
 
 	return 0;

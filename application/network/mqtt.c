@@ -8,7 +8,7 @@
 #include <zephyr/net/mqtt.h>
 #include <zephyr/posix/arpa/inet.h>
 #include "app.h"
-#include "app/appq.h"
+#include "firmware/appq.h"
 #include "server.h"
 
 /* Buffers for MQTT client. */
@@ -22,12 +22,12 @@ static struct pollfd fds[1];
 static struct mqtt_client      client_ctx;
 static struct sockaddr_storage broker;
 
-struct mqtt_server_fw_query {
+struct mqtt_topic_app_image {
 	const char* url;
 };
 
-static const struct json_obj_descr server_fw_update_descr[] = {
-	JSON_OBJ_DESCR_PRIM(struct mqtt_server_fw_query, url, JSON_TOK_STRING),
+static const struct json_obj_descr mqtt_topic_app_image_descr[] = {
+	JSON_OBJ_DESCR_PRIM(struct mqtt_topic_app_image, url, JSON_TOK_STRING),
 };
 
 static void mqtt_broker_init(void);
@@ -40,6 +40,10 @@ static void mqtt_evt_handler(struct mqtt_client*    client,
                              const struct mqtt_evt* evt);
 static void mqtt_publish_handler(struct mqtt_client*    client,
                                  const struct mqtt_evt* evt);
+static void mqtt_handle_app_topic(struct appq* data, enum appq_msg id,
+                                  struct mqtt_topic_app_image* topic_app);
+static void mqtt_handle_image_topic(struct appq* data, enum appq_msg id,
+                                    struct mqtt_topic_app_image* topic_app);
 
 int mqtt_init()
 {
@@ -275,35 +279,53 @@ static void mqtt_publish_handler(struct mqtt_client*    client,
 		return;
 	}
 
-	char buf[evt->param.publish.message.payload.len];
-	int  error = mqtt_read_publish_payload(client,
-                                          buf,
-                                          evt->param.publish.message.payload
-                                              .len);
+	char                        buf[evt->param.publish.message.payload.len];
+	struct mqtt_topic_app_image topic_app = { 0 };
+	struct appq                 data      = { 0 };
+
+	int error = mqtt_read_publish_payload(client,
+	                                      buf,
+	                                      evt->param.publish.message.payload
+	                                          .len);
 	if (error < 0) {
 		printk("Failed to read mqtt payload error=%d\n", error);
 		return;
 	}
 
-	struct mqtt_server_fw_query server_fw_query = { 0 };
-	error                                       = json_obj_parse(buf,
-                           evt->param.publish.message.payload.len,
-                           server_fw_update_descr,
-                           ARRAY_SIZE(server_fw_update_descr),
-                           &server_fw_query);
+	error = json_obj_parse(buf,
+	                       evt->param.publish.message.payload.len,
+	                       mqtt_topic_app_image_descr,
+	                       ARRAY_SIZE(mqtt_topic_app_image_descr),
+	                       &topic_app);
 	if (error < 0) {
 		printk("Failed to parse JSON payload error=%d\n", error);
 		return;
 	}
 
-	struct appq data = { .id = APP_FIRMWARE_AVAILABLE, .error = error };
-	// Note: This copy may be redundant. Maybe pass struct appq instead of ?
-	strcpy(data.url, server_fw_query.url);
-	app_send(&data);
+	if (strstr(evt->param.publish.message.topic.topic.utf8, "app") != NULL) {
+		mqtt_handle_app_topic(&data, APP_AVAILABLE, &topic_app);
+	}
+	else if (strstr(evt->param.publish.message.topic.topic.utf8, "image") !=
+	         NULL) {
+		mqtt_handle_image_topic(&data, IMAGE_AVAILABLE, &topic_app);
+	}
 
 	printk("(mqtt_read_publish_payload) error=%d message='%s'\n\n", error, buf);
 }
 
-int mqtt_handle_app_firmware(const char* buf, uint32_t len) {
+static void mqtt_handle_app_topic(struct appq* data, enum appq_msg id,
+                                  struct mqtt_topic_app_image* topic_app)
+{
+	data->id = id;
+	// Note: This copy may be redundant. Maybe pass struct appq instead of ?
+	strcpy(data->url, topic_app->url);
+	app_send(data);
+}
 
+static void mqtt_handle_image_topic(struct appq* data, enum appq_msg id,
+                                    struct mqtt_topic_app_image* topic_app)
+{
+	data->id = id;
+	strcpy(data->url, topic_app->url);
+	app_send(data);
 }

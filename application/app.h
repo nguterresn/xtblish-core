@@ -1,7 +1,7 @@
 #pragma once
 
 #include <stdint.h>
-#include "app/appq.h"
+#include "firmware/appq.h"
 
 int  app_init();
 int  app_send(struct appq* data);

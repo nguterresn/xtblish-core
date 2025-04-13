@@ -1,5 +1,7 @@
 #include "app.h"
-#include "app/handle.h"
+#include "firmware/appq.h"
+#include "firmware/app_handle.h"
+#include "firmware/image_handle.h"
 #include "stdio.h"
 #include <zephyr/kernel.h>
 #include <zephyr/data/json.h>
@@ -42,14 +44,17 @@ void app_thread(void* arg1, void* arg2, void* arg3)
 static void app_handle_message(struct appq* data)
 {
 	switch (data->id) {
-	case APP_FIRMWARE_AVAILABLE:
+	case APP_AVAILABLE:
 		app_handle_firmware_available(data);
 		break;
-	case APP_FIRMWARE_DOWNLOADED:
+	case APP_DOWNLOADED:
 		app_handle_firmware_downloaded(data);
 		break;
-	case APP_FIRMWARE_VERIFIED:
+	case APP_VERIFIED:
 		app_handle_firmware_verified(data);
+		break;
+	case IMAGE_AVAILABLE:
+		image_handle_firmware_available(data);
 		break;
 	}
 }

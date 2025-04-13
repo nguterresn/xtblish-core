@@ -1,7 +1,6 @@
 #pragma once
 #include "stdint.h"
 #include "stdbool.h"
-#include "app/appq.h"
 
 #define FLASH_SECTOR_LEN 4096
 
