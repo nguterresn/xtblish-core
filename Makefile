@@ -25,10 +25,13 @@ ram_report:
 rom_report:
 	west build -b esp32s3_devkitc/esp32s3/procpu -t rom_report > rom_report.txt
 
-sign: zephyr
+image-keys:
+	# python3 ../bootloader/mcuboot/scripts/imgtool.py keygen -k dist/image_keys.pem -t ed25519
+
+plain: zephyr
 	python3 ../bootloader/mcuboot/scripts/imgtool.py create --version $(IMAGE_0_VERSION) --align 4 --header-size 32 --slot-size $(IMAGE_0_SLOT_SIZE) build/zephyr/zephyr.bin dist/unsigned-image0.bin
 
-flash: sign
+flash: plain
 	python3 /Users/nunonogueira/Projectos/zephyr-projects/modules/hal/espressif/tools/esptool_py/esptool.py -p /dev/cu.wchusbserial58FC0505471 --baud 921600 --before default_reset --after hard_reset write_flash -u --flash_mode dio --flash_freq 40m --flash_size detect $(IMAGE_0_OFFSET) dist/unsigned-image0.bin
 
 erase-image0:
@@ -38,16 +41,11 @@ dump-app0:
 		/Users/nunonogueira/Projectos/zephyr-projects/wasm-zephyr-ota/.venv/bin/python3.13 /Users/nunonogueira/Projectos/zephyr-projects/modules/hal/espressif/tools/esptool_py/esptool.py --chip auto --baud 921600 read_flash 0x210000 0x6000 dump_app0.bin
 		# xxd dump_app0.bin | less
 
-dump-wasm0:
-		/Users/nunonogueira/Projectos/zephyr-projects/wasm-zephyr-ota/.venv/bin/python3.13 /Users/nunonogueira/Projectos/zephyr-projects/modules/hal/espressif/tools/esptool_py/esptool.py --chip auto --baud 921600 read_flash 0x210224 0x6000 dump_wasm0.wasm
-
 dump-app1:
 		/Users/nunonogueira/Projectos/zephyr-projects/wasm-zephyr-ota/.venv/bin/python3.13 /Users/nunonogueira/Projectos/zephyr-projects/modules/hal/espressif/tools/esptool_py/esptool.py --chip auto --baud 921600 read_flash 0x410000 0x6000 dump_app1.bin
-		# xxd dump_app1.bin | less
 
 monitor:
 	west espressif monitor -p /dev/cu.wchusbserial58FC0505471
-	# west espressif monitor -p /dev/cu.usbmodem1101
 
 ocd:
 	/Applications/openocd-esp32/bin/openocd -c 'set ESP_RTOS none;' -f /Applications/openocd-esp32/share/openocd/scripts/board/esp32s3-builtin.cfg
