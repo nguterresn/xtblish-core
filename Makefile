@@ -53,5 +53,5 @@ ocd:
 clean:
 	rm -rf build
 
-.PHONY: build config clean run zephyr sign flash menuconfig rom_report ram_report
+.PHONY: build config clean run zephyr sign flash image-keys plain menuconfig rom_report ram_report
 
