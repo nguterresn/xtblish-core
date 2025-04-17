@@ -1,18 +1,23 @@
 # Nothing for now.
 
 IMAGE_0_VERSION := 0.0.1
-IMAGE_SLOT_SIZE := 1048576
+IMAGE_SLOT_SIZE := 0x100000
 
-IMAGE_0_OFFSET := 0x17000
-IMAGE_1_OFFSET := 0x117000
+IMAGE_0_OFFSET := 0x20000
+IMAGE_1_OFFSET := 0x120000
 
-APP_0_OFFSET := 0x217000
-APP_1_OFFSET := 0x417000
+APP_0_OFFSET := 0x220000
+APP_1_OFFSET := 0x420000
 
 UNSIGNED_IMAGE := dist/unsigned_image.bin
 SIGNED_IMAGE := dist/signed_image.bin
 
 SIGN_KEYS_PATH := dist/image_keys.pem
+
+PORT := /dev/tty.wchusbserial58FC0505471
+
+list:
+	ls /dev/tty.*
 
 config:
 	cmake -S . -B build
@@ -48,36 +53,39 @@ plain: zephyr
 
 sign: zephyr
 	python3 ../bootloader/mcuboot/scripts/imgtool.py sign \
-		--key $(SIGN_KEYS_PATH)
+		--key $(SIGN_KEYS_PATH) \
 		--version $(IMAGE_0_VERSION) \
 		--align 4 \
 		--header-size 32 \
 		--slot-size $(IMAGE_SLOT_SIZE) \
 		build/zephyr/zephyr.bin $(SIGNED_IMAGE)
 
+dump-sign:
+	python3 ../bootloader/mcuboot/scripts/imgtool.py dumpinfo $(SIGNED_IMAGE)
+
 flash-plain: plain
-	python3 /Users/nunonogueira/Projectos/zephyr-projects/modules/hal/espressif/tools/esptool_py/esptool.py \
-		-p /dev/cu.wchusbserial58FC0505471 \
+	python3 ../modules/hal/espressif/tools/esptool_py/esptool.py \
+		-p $(PORT) \
 		--baud 921600 --before default_reset --after hard_reset write_flash \
 		-u --flash_mode dio --flash_freq 40m --flash_size detect $(IMAGE_0_OFFSET) $(UNSIGNED_IMAGE)
 
 flash-sign: sign
-	python3 /Users/nunonogueira/Projectos/zephyr-projects/modules/hal/espressif/tools/esptool_py/esptool.py \
-		-p /dev/cu.wchusbserial58FC0505471 \
+	python3 ../modules/hal/espressif/tools/esptool_py/esptool.py \
+		-p $(PORT) \
 		--baud 921600 --before default_reset --after hard_reset write_flash \
 		-u --flash_mode dio --flash_freq 40m --flash_size detect $(IMAGE_0_OFFSET) $(SIGNED_IMAGE)
 
 erase-image0:
 	python3 /Users/nunonogueira/Projectos/zephyr-projects/modules/hal/espressif/tools/esptool_py/esptool.py \
-		-p /dev/cu.wchusbserial58FC0505471 \
+		-p $(PORT) \
 		--baud 921600 \
 		erase_region $(IMAGE_0_OFFSET) 0x100000
 
 erase-all:
 	python3 /Users/nunonogueira/Projectos/zephyr-projects/modules/hal/espressif/tools/esptool_py/esptool.py \
-		-p /dev/cu.wchusbserial58FC0505471 \
+		-p $(PORT) \
 		--baud 921600 \
-		erase_flash
+		erase_region 0x0 0x400000
 
 dump-app0:
 		/Users/nunonogueira/Projectos/zephyr-projects/wasm-zephyr-ota/.venv/bin/python3.13 /Users/nunonogueira/Projectos/zephyr-projects/modules/hal/espressif/tools/esptool_py/esptool.py --chip auto --baud 921600 read_flash $(APP_0_OFFSET) 0x6000 dump_app0.bin
@@ -87,7 +95,7 @@ dump-app1:
 		/Users/nunonogueira/Projectos/zephyr-projects/wasm-zephyr-ota/.venv/bin/python3.13 /Users/nunonogueira/Projectos/zephyr-projects/modules/hal/espressif/tools/esptool_py/esptool.py --chip auto --baud 921600 read_flash $(APP_1_OFFSET) 0x6000 dump_app1.bin
 
 monitor:
-	west espressif monitor -p /dev/cu.wchusbserial58FC0505471
+	west espressif monitor -p $(PORT)
 
 ocd:
 	/Applications/openocd-esp32/bin/openocd -c 'set ESP_RTOS none;' -f /Applications/openocd-esp32/share/openocd/scripts/board/esp32s3-builtin.cfg

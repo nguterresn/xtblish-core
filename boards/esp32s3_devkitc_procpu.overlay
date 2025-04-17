@@ -16,7 +16,6 @@
   status = "okay";
 };
 
-
 /delete-node/ &boot_partition;
 /delete-node/ &slot0_partition;
 /delete-node/ &slot1_partition;
@@ -35,24 +34,28 @@
     #size-cells = < 0x1 >;
     boot_partition: partition@0 {
       label = "mcuboot";
-      reg = < 0x0 0x17000 >;
+      reg = < 0x0 0x20000 >;
       read-only;
     };
-    slot0_partition: partition@17000 {
+    slot0_partition: partition@20000 {
       label = "image-0";
-      reg = < 0x17000 0x100000 >;
+      reg = < 0x20000 0x100000 >;
     };
-    slot1_partition: partition@117000 {
+    slot1_partition: partition@120000 {
       label = "image-1";
-      reg = < 0x117000 0x100000 >;
+      reg = < 0x120000 0x100000 >;
     };
-    app0_partition: partition@217000 {
+    app0_partition: partition@220000 {
       label = "app-0";
-      reg = < 0x217000 0x200000 >;
+      reg = < 0x220000 0x200000 >;
     };
-    app1_partition: partition@417000 {
+    app1_partition: partition@420000 {
       label = "app-1";
-      reg = < 0x417000 0x200000 >;
+      reg = < 0x420000 0x200000 >;
+    };
+    storage_partition: partition@620000 {
+      label = "storage";
+      reg = < 0x620000 0x6000 >;
     };
   };
 };
