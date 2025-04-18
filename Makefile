@@ -46,6 +46,7 @@ image-keys:
 plain: zephyr
 	python3 ../bootloader/mcuboot/scripts/imgtool.py create \
 	 	--version $(IMAGE_0_VERSION) \
+		--pad \
 	 	--align 4 \
 		--header-size 32 \
 		--slot-size $(IMAGE_SLOT_SIZE) \
@@ -55,6 +56,7 @@ sign: zephyr
 	python3 ../bootloader/mcuboot/scripts/imgtool.py sign \
 		--key $(SIGN_KEYS_PATH) \
 		--version $(IMAGE_0_VERSION) \
+		--pad --pad-sig \
 		--align 4 \
 		--header-size 32 \
 		--slot-size $(IMAGE_SLOT_SIZE) \
