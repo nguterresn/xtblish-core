@@ -1,5 +1,18 @@
 import argparse
 
+def polute_bin_file(input_bin: str, output_bin: str):
+    with open(input_bin, 'rb') as f:
+        data = bytearray(f.read())
+
+    data[100] = 0xFF
+    data[101] = 0xFF
+    data[102] = 0xFF
+    data[103] = 0xFF
+
+    # Write the modified data back to the file
+    with open(output_bin, 'wb') as f:
+        f.write(data)
+
 def strip_bin_file(input_bin: str, output_bin: str, strip_len: str):
     prefix_size = 32 + 512 + 4
     with open(input_bin, "rb") as f:
@@ -37,17 +50,19 @@ def main():
 
     parser.add_argument("-s", "--strip", help="Strip binary")
     parser.add_argument("-c", "--create", action="store_true", help="Create binary")
-
+    parser.add_argument("-p", "--polute", action="store_true", help="Polute binary")
 
     parser.add_argument("-i", "--input", help="Path to the input file")
     parser.add_argument("-o", "--output_bin", help="Path to the output binary file")
 
     args = parser.parse_args()
 
-    if (args.strip):
+    if args.strip:
         strip_bin_file(args.input, args.output_bin, args.strip)
-    if (args.create):
+    if args.create:
         create_bin_file_with_length(args.input, args.output_bin)
+    if args.polute:
+        polute_bin_file(args.input, args.output_bin)
 
 
 if __name__ == "__main__":
