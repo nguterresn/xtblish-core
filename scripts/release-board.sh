@@ -1,7 +1,7 @@
 
 echo "\nRelease factory build for 'esp32s3_devkitc-esp32s3-procpu'"
 
-python3 scripts/util_binary.py -i dist/bootloader.bin -m dist/unsigned_image.bin -o dist/bootimage.bin
+python3 scripts/util_binary.py -i dist/bootloader.bin -m dist/signed_image.bin -o dist/bootimage.bin
 curl -X POST \
   --data-binary @./dist/bootimage.bin \
   -H "Content-Type: application/octet-stream" \
