@@ -17,7 +17,7 @@
 
 struct wasm_file {
 	uint8_t  hash[32];
-	uint8_t  data[512];
+	uint8_t  data[256];
 	uint32_t size;
 	uint32_t prefix;
 	uint32_t version;

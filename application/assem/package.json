@@ -20,6 +20,6 @@
     }
   },
   "dependencies": {
-    "xtblish-client": "^1.0.20"
+    "xtblish-client": "^1.1.9"
   }
 }
