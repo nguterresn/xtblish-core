@@ -127,16 +127,17 @@ static int mqtt_setup(void)
 		return error;
 	}
 
-	// TODO: replace '124' with device's id.
-	error = mqtt_sub("app/124");
+	// TODO: replace '124' with group's id.
+	error = mqtt_sub("app/680d2399a6f0500306e67244");
 	if (error < 0) {
 		return error;
 	}
 
-	error = mqtt_sub("image");
-	if (error < 0) {
-		return error;
-	}
+	// Not yet ready.
+	// error = mqtt_sub("image");
+	// if (error < 0) {
+	// 	return error;
+	// }
 
 	return 0;
 }

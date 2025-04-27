@@ -16,7 +16,7 @@
 #endif
 
 struct wasm_file {
-	uint8_t  hash[32];
+	uint8_t  signature[64];
 	uint8_t  data[256];
 	uint32_t size;
 	uint32_t prefix;
