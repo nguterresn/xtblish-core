@@ -133,7 +133,6 @@ static int mqtt_setup(void)
 		return error;
 	}
 
-	// Not yet ready.
 	// error = mqtt_sub("image");
 	// if (error < 0) {
 	// 	return error;

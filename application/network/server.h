@@ -1,11 +1,11 @@
 #pragma once
 
-#define SERVER_IP            "192.168.0.140"
+#define SERVER_IP            "192.168.0.101"
 #define SERVER_HTTP_PORT     3000
 #define SERVER_MQTT_PORT     1883
 #define SERVER_HTTP_PROTOCOL "HTTP/1.1"
 
-#define SERVER_MQTT_BUFFER_SIZE 256
+#define SERVER_MQTT_BUFFER_SIZE 128
 
 #define SERVER_MQTT_TIMEOUT 2000
 #define SERVER_HTTP_TIMEOUT 15000
